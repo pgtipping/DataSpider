@@ -7,13 +7,13 @@ The `CrawlResult` class represents the result of a web crawling operation. It pr
 ```python
 class CrawlResult(BaseModel):
     """Result of a web crawling operation."""
-    
+
     # Basic Information
     url: str                                # Crawled URL
     success: bool                           # Whether crawl succeeded
     status_code: Optional[int] = None       # HTTP status code
     error_message: Optional[str] = None     # Error message if failed
-    
+
     # Content
     html: str                              # Raw HTML content
     cleaned_html: Optional[str] = None      # Cleaned HTML
@@ -21,13 +21,13 @@ class CrawlResult(BaseModel):
     markdown: Optional[str] = None          # HTML converted to markdown
     fit_markdown: Optional[str] = None      # Most relevant markdown content
     downloaded_files: Optional[List[str]] = None  # Downloaded files
-    
+
     # Extracted Data
     extracted_content: Optional[str] = None  # Content from extraction strategy
     media: Dict[str, List[Dict]] = {}       # Extracted media information
     links: Dict[str, List[Dict]] = {}       # Extracted links
     metadata: Optional[dict] = None         # Page metadata
-    
+
     # Additional Data
     screenshot: Optional[str] = None         # Base64 encoded screenshot
     session_id: Optional[str] = None         # Session identifier
@@ -51,6 +51,7 @@ print(result.error_message)  # Error details if failed
 ### Content Properties
 
 #### HTML Content
+
 ```python
 # Raw HTML
 html_content = result.html
@@ -63,6 +64,7 @@ main_content = result.fit_html
 ```
 
 #### Markdown Content
+
 ```python
 # Full markdown version
 markdown_content = result.markdown
@@ -198,7 +200,7 @@ Base64 encoded screenshot:
 # Save screenshot if available
 if result.screenshot:
     import base64
-    
+
     # Decode and save
     with open("screenshot.png", "wb") as f:
         f.write(base64.b64decode(result.screenshot))
@@ -207,14 +209,15 @@ if result.screenshot:
 ## Usage Examples
 
 ### Basic Content Access
+
 ```python
 async with AsyncWebCrawler() as crawler:
     result = await crawler.arun(url="https://example.com")
-    
+
     if result.success:
         # Get clean content
         print(result.fit_markdown)
-        
+
         # Process images
         for image in result.media["images"]:
             if image["score"] > 7:
@@ -222,14 +225,15 @@ async with AsyncWebCrawler() as crawler:
 ```
 
 ### Complete Data Processing
+
 ```python
 async def process_webpage(url: str) -> Dict:
     async with AsyncWebCrawler() as crawler:
         result = await crawler.arun(url=url)
-        
+
         if not result.success:
             raise Exception(f"Crawl failed: {result.error_message}")
-        
+
         return {
             "content": result.fit_markdown,
             "images": [
@@ -245,25 +249,26 @@ async def process_webpage(url: str) -> Dict:
 ```
 
 ### Error Handling
+
 ```python
 async def safe_crawl(url: str) -> Dict:
     async with AsyncWebCrawler() as crawler:
         try:
             result = await crawler.arun(url=url)
-            
+
             if not result.success:
                 return {
                     "success": False,
                     "error": result.error_message,
                     "status": result.status_code
                 }
-            
+
             return {
                 "success": True,
                 "content": result.fit_markdown,
                 "status": result.status_code
             }
-            
+
         except Exception as e:
             return {
                 "success": False,
@@ -275,6 +280,7 @@ async def safe_crawl(url: str) -> Dict:
 ## Best Practices
 
 1. **Always Check Success**
+
 ```python
 if not result.success:
     print(f"Error: {result.error_message}")
@@ -282,12 +288,14 @@ if not result.success:
 ```
 
 2. **Use fit_markdown for Articles**
+
 ```python
 # Better for article content
 content = result.fit_markdown if result.fit_markdown else result.markdown
 ```
 
 3. **Filter Media by Score**
+
 ```python
 relevant_images = [
     img for img in result.media["images"]
@@ -296,6 +304,7 @@ relevant_images = [
 ```
 
 4. **Handle Missing Data**
+
 ```python
 metadata = result.metadata or {}
 title = metadata.get('title', 'Unknown Title')

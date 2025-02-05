@@ -1,11 +1,13 @@
-#  Creating Browser Instances, Contexts, and Pages
+# Creating Browser Instances, Contexts, and Pages
 
 ## 1 Introduction
 
 ### Overview of Browser Management in Crawl4AI
+
 Crawl4AI's browser management system is designed to provide developers with advanced tools for handling complex web crawling tasks. By managing browser instances, contexts, and pages, Crawl4AI ensures optimal performance, anti-bot measures, and session persistence for high-volume, dynamic web crawling.
 
 ### Key Objectives
+
 - **Anti-Bot Handling**:
   - Implements stealth techniques to evade detection mechanisms used by modern websites.
   - Simulates human-like behavior, such as mouse movements, scrolling, and key presses.
@@ -22,9 +24,11 @@ Crawl4AI's browser management system is designed to provide developers with adva
 ## 2 Browser Creation Methods
 
 ### Standard Browser Creation
+
 Standard browser creation initializes a browser instance with default or minimal configurations. It is suitable for tasks that do not require session persistence or heavy customization.
 
 #### Features and Limitations
+
 - **Features**:
   - Quick and straightforward setup for small-scale tasks.
   - Supports headless and headful modes.
@@ -33,6 +37,7 @@ Standard browser creation initializes a browser instance with default or minimal
   - May struggle with sites employing strict anti-bot measures.
 
 #### Example Usage
+
 ```python
 from crawl4ai import AsyncWebCrawler, BrowserConfig
 
@@ -43,9 +48,11 @@ async with AsyncWebCrawler(config=browser_config) as crawler:
 ```
 
 ### Persistent Contexts
+
 Persistent contexts create browser sessions with stored data, enabling workflows that require maintaining login states or other session-specific information.
 
 #### Benefits of Using `user_data_dir`
+
 - **Session Persistence**:
   - Stores cookies, local storage, and cache between crawling sessions.
   - Reduces overhead for repetitive logins or multi-step workflows.
@@ -55,6 +62,7 @@ Persistent contexts create browser sessions with stored data, enabling workflows
   - Adapts to complex workflows requiring user-specific configurations.
 
 #### Example: Setting Up Persistent Contexts
+
 ```python
 config = BrowserConfig(user_data_dir="/path/to/user/data")
 async with AsyncWebCrawler(config=config) as crawler:
@@ -63,9 +71,11 @@ async with AsyncWebCrawler(config=config) as crawler:
 ```
 
 ### Managed Browser
+
 The `ManagedBrowser` class offers a high-level abstraction for managing browser instances, emphasizing resource management, debugging capabilities, and anti-bot measures.
 
 #### How It Works
+
 - **Browser Process Management**:
   - Automates initialization and cleanup of browser processes.
   - Optimizes resource usage by pooling and reusing browser instances.
@@ -75,6 +85,7 @@ The `ManagedBrowser` class offers a high-level abstraction for managing browser 
   - Implements stealth plugins to mimic real user behavior and bypass bot detection.
 
 #### Features
+
 - **Customizable Configurations**:
   - Supports advanced options such as viewport resizing, proxy settings, and header manipulation.
 - **Debugging and Logging**:
@@ -83,6 +94,7 @@ The `ManagedBrowser` class offers a high-level abstraction for managing browser 
   - Handles multiple browser instances concurrently, scaling dynamically based on workload.
 
 #### Example: Using `ManagedBrowser`
+
 ```python
 from crawl4ai import AsyncWebCrawler, BrowserConfig
 
@@ -97,9 +109,11 @@ async with AsyncWebCrawler(config=config) as crawler:
 ## 3 Context and Page Management
 
 ### Creating and Configuring Browser Contexts
+
 Browser contexts act as isolated environments within a single browser instance, enabling independent browsing sessions with their own cookies, cache, and storage.
 
 #### Customizations
+
 - **Headers and Cookies**:
   - Define custom headers to mimic specific devices or browsers.
   - Set cookies for authenticated sessions.
@@ -108,6 +122,7 @@ Browser contexts act as isolated environments within a single browser instance, 
   - Example: Preserve login states for authenticated crawls.
 
 #### Example: Context Initialization
+
 ```python
 from crawl4ai import CrawlerRunConfig
 
@@ -118,9 +133,11 @@ async with AsyncWebCrawler() as crawler:
 ```
 
 ### Creating Pages
+
 Pages represent individual tabs or views within a browser context. They are responsible for rendering content, executing JavaScript, and handling user interactions.
 
 #### Key Features
+
 - **IFrame Handling**:
   - Extract content from embedded iframes.
   - Navigate and interact with nested content.
@@ -130,6 +147,7 @@ Pages represent individual tabs or views within a browser context. They are resp
   - Ensure dynamic elements are fully loaded before extraction.
 
 #### Example: Page Initialization
+
 ```python
 config = CrawlerRunConfig(viewport_width=1920, viewport_height=1080)
 async with AsyncWebCrawler() as crawler:
@@ -142,9 +160,11 @@ async with AsyncWebCrawler() as crawler:
 ## 4 Advanced Features and Best Practices
 
 ### Debugging and Logging
+
 Remote debugging provides a powerful way to troubleshoot complex crawling workflows.
 
 #### Example: Enabling Remote Debugging
+
 ```python
 config = BrowserConfig(debug_port=9222)
 async with AsyncWebCrawler(config=config) as crawler:
@@ -152,6 +172,7 @@ async with AsyncWebCrawler(config=config) as crawler:
 ```
 
 ### Anti-Bot Techniques
+
 - **Human Behavior Simulation**:
   - Mimic real user actions, such as scrolling, clicking, and typing.
   - Example: Use JavaScript to simulate interactions.
@@ -159,6 +180,7 @@ async with AsyncWebCrawler(config=config) as crawler:
   - Integrate with third-party services like 2Captcha or AntiCaptcha for automated solving.
 
 #### Example: Simulating User Actions
+
 ```python
 js_code = """
 (async () => {
@@ -172,12 +194,14 @@ async with AsyncWebCrawler() as crawler:
 ```
 
 ### Optimizations for Performance and Scalability
+
 - **Persistent Contexts**:
   - Reuse browser contexts to minimize resource consumption.
 - **Concurrent Crawls**:
   - Use `arun_many` with a controlled semaphore count for efficient batch processing.
 
 #### Example: Scaling Crawls
+
 ```python
 urls = ["https://example1.com", "https://example2.com"]
 config = CrawlerRunConfig(semaphore_count=10)

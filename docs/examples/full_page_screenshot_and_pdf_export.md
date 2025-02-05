@@ -6,11 +6,13 @@ When dealing with very long web pages, traditional full-page screenshots can be 
 We’ve introduced a new feature that effortlessly handles even the biggest pages by first exporting them as a PDF, then converting that PDF into a high-quality image. This approach leverages the browser’s built-in PDF rendering, making it both stable and efficient for very long content. You also have the option to directly save the PDF for your own usage—no need for multiple passes or complex stitching logic.
 
 **Key Benefits:**
+
 - **Reliability:** The PDF export never times out and works regardless of page length.
 - **Versatility:** Get both the PDF and a screenshot in one crawl, without reloading or reprocessing.
 - **Performance:** Skips manual scrolling and stitching images, reducing complexity and runtime.
 
 **Simple Example:**
+
 ```python
 import os, sys
 import asyncio
@@ -30,14 +32,14 @@ async def main():
             pdf=True,
             screenshot=True
         )
-        
+
         if result.success:
             # Save screenshot
             if result.screenshot:
                 from base64 import b64decode
                 with open(os.path.join(__location__, "screenshot.png"), "wb") as f:
                     f.write(b64decode(result.screenshot))
-            
+
             # Save PDF
             if result.pdf:
                 pdf_bytes = b64decode(result.pdf)
@@ -49,6 +51,7 @@ if __name__ == "__main__":
 ```
 
 **What Happens Under the Hood:**
+
 - Crawl4AI navigates to the target page.
 - If `pdf=True`, it exports the current page as a full PDF, capturing all of its content no matter the length.
 - If `screenshot=True`, and a PDF is already available, it directly converts the first page of that PDF to an image for you—no repeated loading or scrolling.
