@@ -1,0 +1,75 @@
+.tryItNow {
+  padding: 4rem 2rem;
+  background-color: #f8f9fa;
+}
+
+.sectionTitle {
+  font-size: 2.5rem;
+  color: #2c3e50;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.demoForm {
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.inputGroup {
+  margin-bottom: 1rem;
+}
+
+.inputGroup label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #34495e;
+}
+
+.input {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.submitButton {
+  display: block;
+  width: 100%;
+  padding: 0.75rem;
+  background-color: #3498db;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.submitButton:hover {
+  background-color: #2980b9;
+}
+
+.submitButton:disabled {
+  background-color: #bdc3c7;
+  cursor: not-allowed;
+}
+
+.result {
+  margin-top: 2rem;
+  padding: 1rem;
+  background-color: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+}
+
+.result h3 {
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.result p {
+  color: #34495e;
+  margin-bottom: 0.25rem;
+}
+

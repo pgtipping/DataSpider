@@ -1,0 +1,50 @@
+.content {
+  flex-grow: 1;
+  max-width: 800px;
+}
+
+.content h2 {
+  font-size: 1.8rem;
+  color: #2c3e50;
+  margin-bottom: 1rem;
+}
+
+.content h3 {
+  font-size: 1.4rem;
+  color: #34495e;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.content p {
+  color: #34495e;
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.codeBlock {
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  padding: 1rem;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.codeBlock code {
+  font-family: "Courier New", Courier, monospace;
+  font-size: 0.9rem;
+  color: #2c3e50;
+}
+
+.content ul {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.content li {
+  color: #34495e;
+  line-height: 1.6;
+  margin-bottom: 0.5rem;
+}
+

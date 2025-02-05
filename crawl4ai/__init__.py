@@ -1,46 +1,109 @@
-# __init__.py
+"""
+crawl4ai - A powerful web crawling and content extraction library.
+"""
 
-from .async_webcrawler import AsyncWebCrawler, CacheMode
-from .async_configs import BrowserConfig, CrawlerRunConfig
-from .extraction_strategy import ExtractionStrategy, LLMExtractionStrategy, CosineStrategy, JsonCssExtractionStrategy
-from .chunking_strategy import ChunkingStrategy, RegexChunking
-from .markdown_generation_strategy import DefaultMarkdownGenerator
-from .content_filter_strategy import PruningContentFilter, BM25ContentFilter
-from .models import CrawlResult
 from .__version__ import __version__
 
+# Core crawlers
+from .crawlers import AsyncWebCrawler, WebCrawler, CacheMode
+
+# Strategies
+from .strategies.chunking import (
+    ChunkingStrategy,
+    RegexChunking,
+    NlpSentenceChunking
+)
+from .strategies.extraction import (
+    ExtractionStrategy,
+    LLMExtractionStrategy,
+    CosineStrategy,
+    JsonCssExtractionStrategy
+)
+from .strategies.content_filtering import (
+    RelevantContentFilter,
+    PruningContentFilter,
+    BM25ContentFilter
+)
+from .strategies.crawling import (
+    CrawlerStrategy,
+    CloudCrawlerStrategy,
+    LocalSeleniumCrawlerStrategy
+)
+
+# Models
+from .models import CrawlResult, CrawlConfig, ExtractedContent, MediaContent
+
+# Utilities
+from .utils import (
+    html2text,
+    sanitize_text,
+    extract_text_from_html,
+    get_domain_from_url,
+    is_valid_url,
+    create_directory_if_not_exists
+)
+
 __all__ = [
-    "AsyncWebCrawler",
-    "CrawlResult",
-    "CacheMode",
-    'BrowserConfig',
-    'CrawlerRunConfig',
+    '__version__',
+    # Crawlers
+    'AsyncWebCrawler',
+    'WebCrawler',
+    'CacheMode',
+    # Chunking Strategies
+    'ChunkingStrategy',
+    'RegexChunking',
+    'NlpSentenceChunking',
+    # Extraction Strategies
     'ExtractionStrategy',
     'LLMExtractionStrategy',
     'CosineStrategy',
     'JsonCssExtractionStrategy',
-    'ChunkingStrategy',
-    'RegexChunking',
-    'DefaultMarkdownGenerator',
+    # Content Filtering
+    'RelevantContentFilter',
     'PruningContentFilter',
     'BM25ContentFilter',
+    # Crawler Strategies
+    'CrawlerStrategy',
+    'CloudCrawlerStrategy',
+    'LocalSeleniumCrawlerStrategy',
+    # Models
+    'CrawlResult',
+    'CrawlConfig',
+    'ExtractedContent',
+    'MediaContent',
+    # Utilities
+    'html2text',
+    'sanitize_text',
+    'extract_text_from_html',
+    'get_domain_from_url',
+    'is_valid_url',
+    'create_directory_if_not_exists'
 ]
 
-def is_sync_version_installed():
+# Optional dependency checks
+def _check_selenium_installed():
+    """Check if selenium is installed without importing it directly."""
     try:
-        import selenium
-        return True
+        import importlib.util
+        return importlib.util.find_spec("selenium") is not None
     except ImportError:
         return False
 
-if is_sync_version_installed():
+# Initialize optional components
+if _check_selenium_installed():
     try:
-        from .web_crawler import WebCrawler
+        from .crawlers.sync.web_crawler import WebCrawler
         __all__.append("WebCrawler")
     except ImportError:
         import warnings
-        print("Warning: Failed to import WebCrawler even though selenium is installed. This might be due to other missing dependencies.")
+        warnings.warn(
+            "Failed to import WebCrawler even though selenium is installed. "
+            "This might be due to other missing dependencies."
+        )
 else:
     WebCrawler = None
-    # import warnings
-    # print("Warning: Synchronous WebCrawler is not available. Install crawl4ai[sync] for synchronous support. However, please note that the synchronous version will be deprecated soon.")
+    import warnings
+    warnings.warn(
+        "Synchronous WebCrawler is not available. Install crawl4ai[sync] for synchronous support. "
+        "Note: The synchronous version will be deprecated in a future release."
+    )

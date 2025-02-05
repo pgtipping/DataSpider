@@ -43,6 +43,17 @@ except Exception:
 setup(
     name="Crawl4AI",
     version=version,
+    packages=find_packages(include=[
+        "crawl4ai",
+        "crawl4ai.*",
+        "crawl4ai.core.*",
+        "crawl4ai.crawlers.*",
+        "crawl4ai.extractors.*",
+        "crawl4ai.models",
+        "crawl4ai.utils",
+        "crawl4ai.api",
+        "crawl4ai.strategies.*"
+    ]),
     description="🚀🤖 Crawl4AI: Open-source LLM Friendly Web Crawler & scraper",
     long_description=open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
@@ -50,7 +61,6 @@ setup(
     author="Unclecode",
     author_email="unclecode@kidocode.com",
     license="MIT",
-    packages=find_packages(),
     package_data={
         'crawl4ai': ['js_snippet/*.js']
     },
