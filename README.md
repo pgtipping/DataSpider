@@ -12,6 +12,7 @@
 [![Downloads](https://static.pepy.tech/badge/crawl4ai/month)](https://pepy.tech/project/crawl4ai)
 
 <!-- [![Documentation Status](https://readthedocs.org/projects/crawl4ai/badge/?version=latest)](https://crawl4ai.readthedocs.io/) -->
+
 [![License](https://img.shields.io/github/license/unclecode/crawl4ai)](https://github.com/unclecode/crawl4ai/blob/main/LICENSE)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![Security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
@@ -19,7 +20,7 @@
 
 </div>
 
-Crawl4AI is the #1 trending GitHub repository, actively maintained by a vibrant community. It delivers blazing-fast, AI-ready web crawling tailored for LLMs, AI agents, and data pipelines. Open source, flexible, and built for real-time performance, Crawl4AI empowers developers with unmatched speed, precision, and deployment ease.  
+Crawl4AI is the #1 trending GitHub repository, actively maintained by a vibrant community. It delivers blazing-fast, AI-ready web crawling tailored for LLMs, AI agents, and data pipelines. Open source, flexible, and built for real-time performance, Crawl4AI empowers developers with unmatched speed, precision, and deployment ease.
 
 [✨ Check out latest update v0.4.24x](#-recent-updates)
 
@@ -27,16 +28,17 @@ Crawl4AI is the #1 trending GitHub repository, actively maintained by a vibrant 
 
 ## 🧐 Why Crawl4AI?
 
-1. **Built for LLMs**: Creates smart, concise Markdown optimized for RAG and fine-tuning applications.  
-2. **Lightning Fast**: Delivers results 6x faster with real-time, cost-efficient performance.  
-3. **Flexible Browser Control**: Offers session management, proxies, and custom hooks for seamless data access.  
-4. **Heuristic Intelligence**: Uses advanced algorithms for efficient extraction, reducing reliance on costly models.  
-5. **Open Source & Deployable**: Fully open-source with no API keys—ready for Docker and cloud integration.  
+1. **Built for LLMs**: Creates smart, concise Markdown optimized for RAG and fine-tuning applications.
+2. **Lightning Fast**: Delivers results 6x faster with real-time, cost-efficient performance.
+3. **Flexible Browser Control**: Offers session management, proxies, and custom hooks for seamless data access.
+4. **Heuristic Intelligence**: Uses advanced algorithms for efficient extraction, reducing reliance on costly models.
+5. **Open Source & Deployable**: Fully open-source with no API keys—ready for Docker and cloud integration.
 6. **Thriving Community**: Actively maintained by a vibrant community and the #1 trending GitHub repository.
 
-## 🚀 Quick Start 
+## 🚀 Quick Start
 
 1. Install Crawl4AI:
+
 ```bash
 # Install the package
 pip install -U crawl4ai
@@ -49,11 +51,13 @@ crawl4ai-doctor
 ```
 
 If you encounter any browser-related issues, you can install them manually:
+
 ```bash
 python -m playwright install --with-deps chromium
 ```
 
 2. Run a simple web crawl:
+
 ```python
 import asyncio
 from crawl4ai import *
@@ -69,7 +73,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-## ✨ Features 
+## ✨ Features
 
 <details>
 <summary>📝 <strong>Markdown Generation</strong></summary>
@@ -78,7 +82,7 @@ if __name__ == "__main__":
 - 🎯 **Fit Markdown**: Heuristic-based filtering to remove noise and irrelevant parts for AI-friendly processing.
 - 🔗 **Citations and References**: Converts page links into a numbered reference list with clean citations.
 - 🛠️ **Custom Strategies**: Users can create their own Markdown generation strategies tailored to specific needs.
-- 📚 **BM25 Algorithm**: Employs BM25-based filtering for extracting core information and removing irrelevant content. 
+- 📚 **BM25 Algorithm**: Employs BM25-based filtering for extracting core information and removing irrelevant content.
 </details>
 
 <details>
@@ -236,6 +240,7 @@ The existing Docker implementation is being deprecated and will be replaced soon
 ### What's Coming Next?
 
 Our new Docker implementation will bring:
+
 - Improved performance and resource efficiency
 - Streamlined deployment process
 - Better integration with Crawl4AI features
@@ -269,7 +274,6 @@ For more examples, see our [Docker Examples](https://github.com/unclecode/crawl4
 
 </details>
 
-
 ## 🔬 Advanced Usage Examples 🔬
 
 You can check the project structure in the directory [https://github.com/unclecode/crawl4ai/docs/examples](docs/examples). Over there, you can find a variety of examples; here, some popular examples are shared.
@@ -285,7 +289,7 @@ from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 async def main():
     browser_config = BrowserConfig(
-        headless=True,  
+        headless=True,
         verbose=True,
     )
     run_config = CrawlerRunConfig(
@@ -297,7 +301,7 @@ async def main():
         #     content_filter=BM25ContentFilter(user_query="WHEN_WE_FOCUS_BASED_ON_A_USER_QUERY", bm25_threshold=1.0)
         # ),
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(
             url="https://docs.micronaut.io/4.7.6/guide/",
@@ -367,9 +371,9 @@ async def main():
         js_code=["""(async () => {const tabs = document.querySelectorAll("section.charge-methodology .tabs-menu-3 > div");for(let tab of tabs) {tab.scrollIntoView();tab.click();await new Promise(r => setTimeout(r, 500));}})();"""],
         cache_mode=CacheMode.BYPASS
     )
-        
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
-        
+
         result = await crawler.arun(
             url="https://www.kidocode.com/degrees/technology",
             config=run_config
@@ -407,17 +411,17 @@ async def main():
         word_count_threshold=1,
         extraction_strategy=LLMExtractionStrategy(
             # Here you can use any provider that Litellm library supports, for instance: ollama/qwen2
-            # provider="ollama/qwen2", api_token="no-token", 
-            provider="openai/gpt-4o", api_token=os.getenv('OPENAI_API_KEY'), 
+            # provider="ollama/qwen2", api_token="no-token",
+            provider="openai/gpt-4o", api_token=os.getenv('OPENAI_API_KEY'),
             schema=OpenAIModelFee.schema(),
             extraction_type="schema",
-            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens. 
-            Do not miss any models in the entire content. One extracted model JSON format should look like this: 
+            instruction="""From the crawled content, extract all mentioned model names along with their fees for input and output tokens.
+            Do not miss any models in the entire content. One extracted model JSON format should look like this:
             {"model_name": "GPT-4", "input_fee": "US$10.00 / 1M tokens", "output_fee": "US$30.00 / 1M tokens"}."""
-        ),            
+        ),
         cache_mode=CacheMode.BYPASS,
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(
             url='https://openai.com/api/pricing/',
@@ -454,24 +458,23 @@ async def test_news_crawl():
     run_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS
     )
-    
+
     async with AsyncWebCrawler(config=browser_config) as crawler:
         url = "ADDRESS_OF_A_CHALLENGING_WEBSITE"
-        
+
         result = await crawler.arun(
             url,
             config=run_config,
             magic=True,
         )
-        
+
         print(f"Successfully crawled {url}")
         print(f"Content length: {len(result.markdown)}")
 ```
 
 </details>
 
-
-## ✨ Recent Updates   
+## ✨ Recent Updates
 
 - 🔒 **Enhanced SSL & Security**: New SSL certificate handling with custom paths and validation options for secure crawling
 - 🔍 **Smart Content Filtering**: Advanced filtering system with regex support and efficient chunking strategies
@@ -483,7 +486,7 @@ async def test_news_crawl():
 
 Read the full details of this release in our [0.4.24 Release Notes](https://github.com/unclecode/crawl4ai/blob/main/CHANGELOG.md).
 
-## 📖 Documentation & Roadmap 
+## 📖 Documentation & Roadmap
 
 > 🚨 **Documentation Update Alert**: We're undertaking a major documentation overhaul next week to reflect recent updates and improvements. Stay tuned for a more comprehensive and up-to-date guide!
 
@@ -509,15 +512,15 @@ To check our development plans and upcoming features, visit our [Roadmap](https:
 
 </details>
 
-## 🤝 Contributing 
+## 🤝 Contributing
 
 We welcome contributions from the open-source community. Check out our [contribution guidelines](https://github.com/unclecode/crawl4ai/blob/main/CONTRIBUTORS.md) for more information.
 
-## 📄 License 
+## 📄 License
 
 Crawl4AI is released under the [Apache 2.0 License](https://github.com/unclecode/crawl4ai/blob/main/LICENSE).
 
-## 📧 Contact 
+## 📧 Contact
 
 For questions, suggestions, or feedback, feel free to reach out:
 
@@ -529,7 +532,7 @@ Happy Crawling! 🕸️🚀
 
 ## 🗾 Mission
 
-Our mission is to unlock the value of personal and enterprise data by transforming digital footprints into structured, tradeable assets. Crawl4AI empowers individuals and organizations with open-source tools to extract and structure data, fostering a shared data economy.  
+Our mission is to unlock the value of personal and enterprise data by transforming digital footprints into structured, tradeable assets. Crawl4AI empowers individuals and organizations with open-source tools to extract and structure data, fostering a shared data economy.
 
 We envision a future where AI is powered by real human knowledge, ensuring data creators directly benefit from their contributions. By democratizing data and enabling ethical sharing, we are laying the foundation for authentic AI advancement.
 
@@ -538,18 +541,19 @@ We envision a future where AI is powered by real human knowledge, ensuring data 
  
 - **Data Capitalization**: Transform digital footprints into measurable, valuable assets.  
 - **Authentic AI Data**: Provide AI systems with real human insights.  
-- **Shared Economy**: Create a fair data marketplace that benefits data creators.  
+- **Shared Economy**: Create a fair data marketplace that benefits data creators.
 
 </details>
 
 <details>
 <summary>🚀 <strong>Development Pathway</strong></summary>
 
-1. **Open-Source Tools**: Community-driven platforms for transparent data extraction.  
-2. **Digital Asset Structuring**: Tools to organize and value digital knowledge.  
-3. **Ethical Data Marketplace**: A secure, fair platform for exchanging structured data.  
+1. **Open-Source Tools**: Community-driven platforms for transparent data extraction.
+2. **Digital Asset Structuring**: Tools to organize and value digital knowledge.
+3. **Ethical Data Marketplace**: A secure, fair platform for exchanging structured data.
 
 For more details, see our [full mission statement](./MISSION.md).
+
 </details>
 
 ## Star History
