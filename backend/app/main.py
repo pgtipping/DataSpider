@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from backend.app.api.v1 import playground_router
+from app.api.v1 import playground_router
 from backend.app.core.security.security import setup_security
 
 app = FastAPI(
