@@ -31,6 +31,20 @@ class MarkdownGenerationResult(BaseModel):
     def to_dict(self):
         return self.dict()
 
+class CrawlerTaskResult(BaseModel):
+    task_id: str
+    status: str
+    result: Optional[CrawlResult] = None
+    error: Optional[str] = None
+    timestamp: float
+
+class DispatchResult(BaseModel):
+    task_id: str
+    status: str
+    url: str
+    callback_url: Optional[str] = None
+    metadata: Dict[str, Any] = {}
+
 class CacheMode(str, Enum):
     MEMORY = "memory"
     DISK = "disk"
