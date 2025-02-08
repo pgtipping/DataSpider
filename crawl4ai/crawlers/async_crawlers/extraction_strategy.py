@@ -13,6 +13,11 @@ class ExtractionStrategy(BaseModel):
     def extract(self, html: str) -> str:
         raise NotImplementedError
 
+class NoExtractionStrategy(ExtractionStrategy):
+    """Returns raw content without processing"""
+    def extract(self, html: str) -> str:
+        return html
+
 class BasicExtraction(ExtractionStrategy):
     def extract(self, html: str) -> str:
         soup = BeautifulSoup(html, 'html.parser')

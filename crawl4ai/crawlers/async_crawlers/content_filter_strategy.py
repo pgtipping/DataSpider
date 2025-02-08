@@ -20,5 +20,24 @@ class BasicContentFilter(ContentFilterStrategy):
             if self.min_length <= len(elem) <= self.max_length
         ]
 
+class RelevantContentFilter(ContentFilterStrategy):
+    def __init__(self, keywords: List[str] = None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.keywords = keywords or []
+        
+    def filter(self, elements: List[str]) -> List[str]:
+        filtered = []
+        for elem in elements:
+            if self.min_length <= len(elem) <= self.max_length:
+                if not self.keywords or any(kw in elem.lower() for kw in self.keywords):
+                    filtered.append(elem)
+        return filtered
+
+    def filter(self, elements: List[str]) -> List[str]:
+        return [
+            elem for elem in elements 
+            if self.min_length <= len(elem) <= self.max_length
+        ]
+
 # Default content filter strategy
 default_content_filter_strategy = BasicContentFilter()
