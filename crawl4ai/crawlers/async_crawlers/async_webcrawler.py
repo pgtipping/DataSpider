@@ -18,7 +18,7 @@ from .content_filter_strategy import *  # noqa: F403
 from .content_filter_strategy import RelevantContentFilter
 from .extraction_strategy import * # noqa: F403
 from .extraction_strategy import NoExtractionStrategy, ExtractionStrategy
-from .async_crawler_strategy import (
+from ...async_crawler_strategy import (
     AsyncCrawlerStrategy,
     AsyncPlaywrightCrawlerStrategy,
     AsyncCrawlResponse,

@@ -16,15 +16,15 @@ import hashlib
 import uuid
 from crawl4ai.js_snippet import load_js_script
 from crawl4ai.crawlers.async_crawlers.models import CrawlResponse, AsyncCrawlResponse
-from .utils import get_error_context
-from .user_agent_generator import UserAgentGenerator
-from .config import SCREENSHOT_HEIGHT_TRESHOLD, DOWNLOAD_PAGE_TIMEOUT
-from .async_configs import BrowserConfig, CrawlerRunConfig
-from .async_logger import AsyncLogger
+from .crawlers.async_crawlers.utils import get_error_context
+from .crawlers.async_crawlers.user_agent_generator import UserAgentGenerator
+from .crawlers.async_crawlers.config import SCREENSHOT_HEIGHT_TRESHOLD, DOWNLOAD_PAGE_TIMEOUT
+from .crawlers.async_crawlers.async_configs import BrowserConfig, CrawlerRunConfig
+from .crawlers.async_crawlers.async_logger import AsyncLogger
 from playwright_stealth import StealthConfig
-from .ssl_certificate import SSLCertificate
-from .utils import get_home_folder, get_chromium_path
-from .user_agent_generator import ValidUAGenerator, OnlineUAGenerator
+from .crawlers.async_crawlers.ssl_certificate import SSLCertificate
+from .crawlers.async_crawlers.utils import get_home_folder, get_chromium_path
+from .crawlers.async_crawlers.user_agent_generator import ValidUAGenerator, OnlineUAGenerator
 
 stealth_config = StealthConfig(
     webdriver=True,
