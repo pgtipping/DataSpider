@@ -232,3 +232,6 @@ plans/
 # Codeium
 .codeiumignore
 todo/
+
+# windsurf rules
+.windsurfrules

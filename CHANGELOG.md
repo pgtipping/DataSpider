@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.4.267] - 2025 - 01 - 06
+### Changed
+Okay, here's a detailed changelog in Markdown format, generated from the provided git diff and commit history. I've focused on user-facing changes, fixes, and features, and grouped them as requested:
 
 ### Added
 
