@@ -1,20 +1,39 @@
 "use client";
 
-import "../app/globals.css";
-import React, { useState } from "react";
+import React, { useState, FormEvent } from "react";
 import { Loader2, AlertCircle, CheckCircle2, Copy, Check } from "lucide-react";
 import { motion } from "framer-motion";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+
+interface ExtractedContent {
+  content: string;
+  metadata?: {
+    wordCount: number;
+    charCount: number;
+  };
+}
 
 const LLMExtraction = () => {
   const [url, setUrl] = useState("");
-  const [format, setFormat] = useState("text");
-  const [extractedContent, setExtractedContent] = useState(null);
+  const [format, setFormat] = useState<"text" | "markdown" | "json">("text");
+  const [extractedContent, setExtractedContent] =
+    useState<ExtractedContent | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const handleSubmit = async (event) => {
+  const breadcrumbItems = [
+    { label: "Home", href: "/" },
+    { label: "Examples", href: "/examples" },
+    {
+      label: "LLM-Powered Extraction",
+      href: "/use-cases/llm-extraction",
+      active: true,
+    },
+  ];
+
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setLoading(true);
     setError(null);
@@ -46,7 +65,9 @@ const LLMExtraction = () => {
       setExtractedContent(data.data);
       setSuccessMessage("Content extracted successfully!");
     } catch (error) {
-      setError(error.message);
+      setError(
+        error instanceof Error ? error.message : "An unexpected error occurred"
+      );
     } finally {
       setLoading(false);
     }
@@ -71,6 +92,7 @@ const LLMExtraction = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-12">
+        <Breadcrumb items={breadcrumbItems} />
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -114,7 +136,9 @@ const LLMExtraction = () => {
               <select
                 id="format"
                 value={format}
-                onChange={(e) => setFormat(e.target.value)}
+                onChange={(e) =>
+                  setFormat(e.target.value as "text" | "markdown" | "json")
+                }
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 disabled={loading}
               >
@@ -194,27 +218,27 @@ const LLMExtraction = () => {
                   <div className="prose max-w-none">
                     {format === "markdown" ? (
                       <pre className="whitespace-pre-wrap">
-                        {extractedContent.content}
+                        {extractedContent?.content}
                       </pre>
                     ) : (
                       <p className="whitespace-pre-wrap">
-                        {extractedContent.content}
+                        {extractedContent?.content}
                       </p>
                     )}
                   </div>
                 )}
               </div>
 
-              {format === "json" && extractedContent.metadata && (
+              {format === "json" && extractedContent?.metadata && (
                 <div className="mt-4 grid grid-cols-2 gap-4">
                   <div className="bg-blue-50 p-4 rounded-lg">
                     <p className="text-sm font-medium text-blue-800">
-                      Word Count: {extractedContent.metadata.wordCount}
+                      Word Count: {extractedContent?.metadata?.wordCount}
                     </p>
                   </div>
                   <div className="bg-blue-50 p-4 rounded-lg">
                     <p className="text-sm font-medium text-blue-800">
-                      Character Count: {extractedContent.metadata.charCount}
+                      Character Count: {extractedContent?.metadata?.charCount}
                     </p>
                   </div>
                 </div>

@@ -1,10 +1,35 @@
 import { NextPage } from "next";
 import Head from "next/head";
-import HeroSection from "../src/components/HeroSection/HeroSection";
-import FeatureSection from "../src/components/FeatureSection/FeatureSection";
-import TestimonialSection from "../src/components/TestimonialSection/TestimonialSection";
-import FAQSection from "../src/components/FAQSection/FAQSection";
-import TryItNow from "../src/components/TryItNow/TryItNow";
+import dynamic from "next/dynamic";
+
+// Dynamic imports for client components
+const HeroSection = dynamic(
+  () => import("@/components/sections/hero-section"),
+  {
+    ssr: false,
+  }
+);
+const FeatureSection = dynamic(
+  () => import("@/components/sections/feature-section/feature-section"),
+  {
+    ssr: false,
+  }
+);
+const TestimonialSection = dynamic(
+  () => import("@/components/sections/testimonial-section/testimonial-section"),
+  {
+    ssr: false,
+  }
+);
+const FAQSection = dynamic(() => import("@/components/sections/faq-section"), {
+  ssr: false,
+});
+const TryItNow = dynamic(
+  () => import("@/components/try-it-now").then((mod) => mod.TryItNow),
+  {
+    ssr: false,
+  }
+);
 
 const HomePage: NextPage = () => {
   return (

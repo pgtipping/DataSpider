@@ -1,18 +1,40 @@
 "use client";
 
-import "../app/globals.css";
-import React, { useState } from "react";
+import React, { useState, FormEvent } from "react";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+
+interface ProductData {
+  title: string;
+  price: string;
+  rating: string;
+  reviewCount: string;
+  brand: string;
+  availability: string;
+  description: string;
+  features: string[];
+  images: string[];
+}
 
 const AmazonProductExtraction = () => {
   const [productUrl, setProductUrl] = useState("");
-  const [productData, setProductData] = useState(null);
+  const [productData, setProductData] = useState<ProductData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
 
-  const fetchProductData = async (url) => {
+  const breadcrumbItems = [
+    { label: "Home", href: "/" },
+    { label: "Examples", href: "/examples" },
+    {
+      label: "Amazon Product Extraction",
+      href: "/use-cases/amazon-product-extraction",
+      active: true,
+    },
+  ];
+
+  const fetchProductData = async (url: string) => {
     setLoading(true);
     setError(null);
     setSuccessMessage("");
@@ -30,33 +52,39 @@ const AmazonProductExtraction = () => {
 
       setProductData(data.data);
       setSuccessMessage("Product data extracted successfully!");
-    } catch (error) {
-      setError(error.message);
+    } catch (err) {
+      const errorMessage =
+        err instanceof Error ? err.message : "An unexpected error occurred";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const url = event.target.elements.url.value.trim();
+    const url = (event.target as HTMLFormElement).elements.namedItem(
+      "url"
+    ) as HTMLInputElement;
+    const urlValue = url.value.trim();
 
-    if (!url) {
+    if (!urlValue) {
       setError("Please enter a valid Amazon product URL");
       return;
     }
 
-    if (!url.includes("amazon.com")) {
+    if (!urlValue.includes("amazon.com")) {
       setError("Please enter a valid Amazon.com URL");
       return;
     }
 
-    fetchProductData(url);
+    fetchProductData(urlValue);
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-12">
+        <Breadcrumb items={breadcrumbItems} />
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -106,116 +134,107 @@ const AmazonProductExtraction = () => {
             </button>
           </form>
 
-          {error && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mt-4 p-4 bg-red-50 rounded-md flex items-start"
-            >
-              <AlertCircle className="h-5 w-5 text-red-400 mt-0.5" />
-              <p className="ml-3 text-sm text-red-700">{error}</p>
-            </motion.div>
-          )}
+          <div className="mt-8">
+            {loading && (
+              <div className="flex items-center justify-center">
+                <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+                <span className="ml-2 text-gray-500">
+                  Extracting product data...
+                </span>
+              </div>
+            )}
 
-          {successMessage && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="mt-4 p-4 bg-green-50 rounded-md flex items-start"
-            >
-              <CheckCircle2 className="h-5 w-5 text-green-400 mt-0.5" />
-              <p className="ml-3 text-sm text-green-700">{successMessage}</p>
-            </motion.div>
-          )}
+            {error && (
+              <div className="flex items-center justify-center text-red-500">
+                <AlertCircle className="h-6 w-6" />
+                <span className="ml-2">{error}</span>
+              </div>
+            )}
 
-          {productData && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mt-8 space-y-6"
-            >
-              <h2 className="text-2xl font-semibold mb-4">
-                Product Information
-              </h2>
+            {successMessage && (
+              <div className="flex items-center justify-center text-green-500">
+                <CheckCircle2 className="h-6 w-6" />
+                <span className="ml-2">{successMessage}</span>
+              </div>
+            )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">Title</h3>
-                    <p className="mt-1 text-gray-600">{productData.title}</p>
-                  </div>
-
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">Price</h3>
-                    <p className="mt-1 text-gray-600">{productData.price}</p>
-                  </div>
-
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">
-                      Rating
-                    </h3>
-                    <p className="mt-1 text-gray-600">
-                      {productData.rating} ({productData.reviewCount})
-                    </p>
-                  </div>
-
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">Brand</h3>
-                    <p className="mt-1 text-gray-600">{productData.brand}</p>
-                  </div>
-
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">
-                      Availability
-                    </h3>
-                    <p className="mt-1 text-gray-600">
-                      {productData.availability}
-                    </p>
-                  </div>
+            {productData && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="mt-8 space-y-6"
+              >
+                <div className="rounded-lg border p-6">
+                  <h2 className="mb-4 text-xl font-semibold">Product Title</h2>
+                  <p className="text-gray-700">{productData?.title}</p>
                 </div>
 
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">
-                      Description
-                    </h3>
-                    <p className="mt-1 text-gray-600">
-                      {productData.description}
-                    </p>
-                  </div>
+                <div className="rounded-lg border p-6">
+                  <h2 className="mb-4 text-xl font-semibold">Price</h2>
+                  <p className="text-gray-700">{productData.price}</p>
+                </div>
 
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900">
-                      Features
-                    </h3>
-                    <ul className="mt-1 list-disc list-inside text-gray-600">
-                      {productData.features.map((feature, index) => (
-                        <li key={index}>{feature}</li>
-                      ))}
-                    </ul>
-                  </div>
+                <div className="rounded-lg border p-6">
+                  <h2 className="mb-4 text-xl font-semibold">
+                    Rating & Reviews
+                  </h2>
+                  <p className="text-gray-700">
+                    Rating: {productData.rating} ({productData.reviewCount}{" "}
+                    reviews)
+                  </p>
+                </div>
 
-                  {productData.images && productData.images.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-medium text-gray-900">
-                        Images
-                      </h3>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
-                        {productData.images.map((image, index) => (
+                <div className="rounded-lg border p-6">
+                  <h2 className="mb-4 text-xl font-semibold">Brand</h2>
+                  <p className="text-gray-700">{productData.brand}</p>
+                </div>
+
+                <div className="rounded-lg border p-6">
+                  <h2 className="mb-4 text-xl font-semibold">Availability</h2>
+                  <p className="text-gray-700">{productData.availability}</p>
+                </div>
+
+                <div className="rounded-lg border p-6">
+                  <h2 className="mb-4 text-xl font-semibold">Description</h2>
+                  <p className="text-gray-700">{productData.description}</p>
+                </div>
+
+                <div className="rounded-lg border p-6">
+                  <h2 className="mb-4 text-xl font-semibold">Features</h2>
+                  <ul className="list-inside list-disc space-y-2">
+                    {productData?.features?.map(
+                      (feature: string, index: number) => (
+                        <li key={index} className="text-gray-700">
+                          {feature}
+                        </li>
+                      )
+                    )}
+                  </ul>
+                </div>
+
+                {(productData?.images?.length || 0) > 0 && (
+                  <div className="rounded-lg border p-6">
+                    <h2 className="mb-4 text-xl font-semibold">
+                      Product Images
+                    </h2>
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+                      {productData?.images?.map(
+                        (image: string, index: number) => (
                           <img
                             key={index}
                             src={image}
                             alt={`Product image ${index + 1}`}
-                            className="rounded-md object-cover w-full h-32"
+                            className="h-auto w-full rounded-lg object-cover"
                           />
-                        ))}
-                      </div>
+                        )
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          )}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </div>
         </div>
       </div>
     </div>

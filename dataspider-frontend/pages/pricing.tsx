@@ -1,9 +1,22 @@
 import { NextPage } from "next";
 import Head from "next/head";
-import Breadcrumb from "../src/components/Breadcrumb/Breadcrumb";
-import PricingPlan from "../src/components/PricingPlan/PricingPlan";
-import FAQSection from "../src/components/FAQSection/FAQSection";
-import TryItNow from "../src/components/TryItNow/TryItNow";
+import dynamic from "next/dynamic";
+
+const Breadcrumb = dynamic(
+  () => import("@/components/ui/breadcrumb").then((mod) => mod.Breadcrumb),
+  { ssr: false }
+);
+const PricingPlan = dynamic(
+  () => import("@/components/sections/pricing-plan"),
+  { ssr: false }
+);
+const FAQSection = dynamic(() => import("@/components/sections/faq-section"), {
+  ssr: false,
+});
+const TryItNow = dynamic(
+  () => import("@/components/try-it-now").then((mod) => mod.TryItNow),
+  { ssr: false }
+);
 
 const pricingPlans = [
   {

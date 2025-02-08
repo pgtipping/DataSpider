@@ -1,0 +1,9 @@
+fastapi>=0.104.0
+uvicorn>=0.23.0
+python-dotenv>=1.0.0
+python-multipart>=0.0.6
+pydantic>=2.0
+websockets>=12.0
+sqlalchemy>=2.0.30
+aiosqlite>=0.20.0
+crawl4ai>=0.4.0  # Ensure we use existing cache system

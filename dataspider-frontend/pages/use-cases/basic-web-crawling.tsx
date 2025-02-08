@@ -1,10 +1,12 @@
 "use client";
 
-import "../app/globals.css";
 import React, { useState, FormEvent } from "react";
 import { NextPage } from "next";
 import Head from "next/head";
-import Breadcrumb from "../../src/components/Breadcrumb/Breadcrumb";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Loader2,
   AlertCircle,
@@ -72,17 +74,23 @@ const BasicWebCrawling: NextPage = () => {
         body: JSON.stringify({ url }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error("Failed to crawl the website");
+        throw new Error(data.error || "Failed to crawl the website");
       }
 
-      const data = await response.json();
-      setResult(data);
+      if (!data.data) {
+        throw new Error("No data returned from the crawler");
+      }
+
+      setResult(data.data);
       setSuccessMessage("Successfully crawled the website!");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "An unexpected error occurred"
       );
+      console.error("Crawling error:", err);
     } finally {
       setLoading(false);
     }
@@ -204,7 +212,7 @@ const BasicWebCrawling: NextPage = () => {
                           Title
                         </h4>
                         <p className="mt-1 text-lg text-gray-900">
-                          {result.title}
+                          {result?.title}
                         </p>
                       </div>
                       <div>
@@ -212,7 +220,7 @@ const BasicWebCrawling: NextPage = () => {
                           Description
                         </h4>
                         <p className="mt-1 text-gray-700">
-                          {result.description || "No description available"}
+                          {result?.description || "No description available"}
                         </p>
                       </div>
                     </div>
@@ -224,7 +232,7 @@ const BasicWebCrawling: NextPage = () => {
                       Headings
                     </h3>
                     <div className="space-y-4">
-                      {result.headings.map((heading, index) => (
+                      {result?.headings?.map((heading, index) => (
                         <div key={index} className="space-y-2">
                           <h4 className="text-sm font-medium text-gray-500">
                             {heading.text}
@@ -238,10 +246,10 @@ const BasicWebCrawling: NextPage = () => {
                 <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
                   <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                     <Link2 className="h-5 w-5 text-blue-600" />
-                    Links ({result.links.length})
+                    Links ({result?.links?.length || 0})
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {result.links.slice(0, 10).map((link, index) => (
+                    {result?.links?.slice(0, 10).map((link, index) => (
                       <a
                         key={index}
                         href={link.href}
@@ -256,21 +264,21 @@ const BasicWebCrawling: NextPage = () => {
                       </a>
                     ))}
                   </div>
-                  {result.links.length > 10 && (
+                  {(result?.links?.length || 0) > 10 && (
                     <p className="mt-4 text-sm text-gray-500 text-center">
-                      ...and {result.links.length - 10} more links
+                      ...and {(result?.links?.length || 0) - 10} more links
                     </p>
                   )}
                 </div>
 
-                {result.images.length > 0 && (
+                {(result?.images?.length || 0) > 0 && (
                   <div className="bg-white rounded-xl shadow-md p-6 border border-gray-100">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                       <ImageIcon className="h-5 w-5 text-purple-600" />
-                      Images ({result.images.length})
+                      Images ({result?.images?.length || 0})
                     </h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                      {result.images.slice(0, 8).map((image, index) => (
+                      {result?.images?.slice(0, 8).map((image, index) => (
                         <div
                           key={index}
                           className="relative aspect-square rounded-lg overflow-hidden group hover:ring-2 hover:ring-purple-500 transition-all duration-200"
@@ -283,9 +291,9 @@ const BasicWebCrawling: NextPage = () => {
                         </div>
                       ))}
                     </div>
-                    {result.images.length > 8 && (
+                    {(result?.images?.length || 0) > 8 && (
                       <p className="mt-4 text-sm text-gray-500 text-center">
-                        ...and {result.images.length - 8} more images
+                        ...and {(result?.images?.length || 0) - 8} more images
                       </p>
                     )}
                   </div>
@@ -297,7 +305,7 @@ const BasicWebCrawling: NextPage = () => {
                     Page Content Preview
                   </h3>
                   <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-                    {result.text}
+                    {result?.text}
                   </p>
                 </div>
               </motion.div>

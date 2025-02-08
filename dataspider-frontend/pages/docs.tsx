@@ -1,10 +1,10 @@
 import { NextPage } from "next";
 import Head from "next/head";
 import { useState } from "react";
-import DocsSidebar from "../src/components/DocsSidebar/DocsSidebar";
-import DocsContent from "../src/components/DocsContent/DocsContent";
-import DocsSearch from "../src/components/DocsSearch/DocsSearch";
-import Breadcrumb from "../src/components/Breadcrumb/Breadcrumb";
+import DocsSidebar from "@/components/docs/docs-sidebar";
+import DocsContent from "@/components/docs/docs-content";
+import DocsSearch from "@/components/docs/docs-search";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
 
 const sections = [
   {
@@ -27,6 +27,11 @@ const sections = [
   },
 ];
 
+const breadcrumbItems = [
+  { label: "Home", href: "/" },
+  { label: "Documentation", href: "/docs" },
+];
+
 const DocsPage: NextPage = () => {
   const [activeSection, setActiveSection] = useState(sections[0].id);
 
@@ -39,16 +44,25 @@ const DocsPage: NextPage = () => {
           content="Complete documentation for DataSpider's web crawling API, including getting started guides, authentication, and usage examples."
         />
       </Head>
-      <div className="max-w-6xl mx-auto px-4 py-12">
-        <h1 className="text-4xl font-bold text-center mb-12">Documentation</h1>
-        <DocsSearch />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          <DocsSidebar
-            sections={sections}
-            activeSection={activeSection}
-            setActiveSection={setActiveSection}
-          />
-          <DocsContent sections={sections} activeSection={activeSection} />
+      <div className="flex flex-col md:flex-row min-h-screen">
+        <DocsSidebar
+          sections={sections}
+          activeSection={activeSection}
+          setActiveSection={setActiveSection}
+        />
+        <div className="flex-1 p-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="mb-8">
+              <Breadcrumb items={breadcrumbItems} />
+              <div className="mt-4">
+                <DocsSearch
+                  sections={sections}
+                  setActiveSection={setActiveSection}
+                />
+              </div>
+            </div>
+            <DocsContent sections={sections} activeSection={activeSection} />
+          </div>
         </div>
       </div>
     </>

@@ -1,20 +1,84 @@
 "use client";
 
-import "../app/globals.css";
-import React, { useState } from "react";
+import React, { useState, FormEvent, ChangeEvent } from "react";
 import { Loader2, AlertCircle, CheckCircle2, Code } from "lucide-react";
 import { motion } from "framer-motion";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+
+interface LoadedItem {
+  title?: string;
+  description?: string;
+  link?: string;
+  date?: string;
+  author?: string;
+}
+
+interface LoadedContent {
+  clickCount: number;
+  totalItems: number;
+  items: { structured: LoadedItem }[];
+}
+
+interface Example {
+  name: string;
+  url: string;
+  selector: string;
+  description: string;
+  contentSelector?: string;
+}
+
+const examples: Example[] = [
+  {
+    name: "Amazon Search Results",
+    url: "https://www.amazon.com/s?k=laptop",
+    selector: "a.s-pagination-next",
+    description:
+      "Navigate through Amazon search result pages to extract product information",
+    contentSelector: "div[data-component-type='s-search-result']",
+  },
+  {
+    name: "Reddit Programming",
+    url: "https://old.reddit.com/r/programming/",
+    selector: "a.next-button",
+    description: "Load more programming posts from Reddit",
+    contentSelector: "div.thing",
+  },
+  {
+    name: "Dev.to Feed",
+    url: "https://dev.to/",
+    selector: "div.crayons-story__load-more button",
+    description: "Load more articles from the Dev.to community feed",
+    contentSelector: "article.crayons-story",
+  },
+  {
+    name: "Medium Latest Stories",
+    url: "https://medium.com/latest",
+    selector: "div[data-testid='postsList'] button",
+    description: "Load more stories from Medium's latest feed",
+    contentSelector: "article.meteredContent",
+  },
+];
 
 const ClickingButtonsToLoadContent = () => {
   const [url, setUrl] = useState("");
   const [selector, setSelector] = useState("");
   const [maxClicks, setMaxClicks] = useState(5);
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<LoadedContent | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
 
-  const handleSubmit = async (event) => {
+  const breadcrumbItems = [
+    { label: "Home", href: "/" },
+    { label: "Examples", href: "/examples" },
+    {
+      label: "Dynamic Content Extraction",
+      href: "/use-cases/clicking-buttons-to-load-content",
+      active: true,
+    },
+  ];
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
     setError(null);
@@ -47,15 +111,22 @@ const ClickingButtonsToLoadContent = () => {
         `Successfully loaded ${data.data.totalItems} items after ${data.data.clickCount} clicks!`
       );
     } catch (error) {
-      setError(error.message);
+      setError(error instanceof Error ? error.message : String(error));
     } finally {
       setLoading(false);
     }
   };
 
+  const loadExample = (example: Example) => {
+    setUrl(example.url);
+    setSelector(example.selector);
+    setMaxClicks(5); // Reset to default
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-12">
+        <Breadcrumb items={breadcrumbItems} />
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -64,10 +135,31 @@ const ClickingButtonsToLoadContent = () => {
           <h1 className="text-4xl font-bold text-center mb-4">
             Dynamic Content Loading
           </h1>
-          <p className="text-xl text-center text-gray-600 mb-12">
+          <p className="text-xl text-center text-gray-600 mb-6">
             Load content by automatically clicking buttons or "load more"
             elements
           </p>
+          <div className="max-w-3xl mx-auto mb-12">
+            <h2 className="text-lg font-semibold mb-4">Try These Examples:</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {examples.map((example) => (
+                <button
+                  key={example.name}
+                  onClick={() => loadExample(example)}
+                  className="p-4 bg-white rounded-lg shadow hover:shadow-md transition-shadow border border-gray-200 text-left"
+                >
+                  <h3 className="font-medium text-blue-600">{example.name}</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    {example.description}
+                  </p>
+                  <div className="mt-2 text-xs text-gray-500">
+                    <div>URL: {example.url}</div>
+                    <div>Selector: {example.selector}</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
         </motion.div>
 
         <div className="bg-white rounded-lg shadow-lg p-8">
@@ -83,7 +175,9 @@ const ClickingButtonsToLoadContent = () => {
                 type="url"
                 id="url"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setUrl(e.target.value)
+                }
                 placeholder="https://example.com"
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 disabled={loading}
@@ -105,7 +199,9 @@ const ClickingButtonsToLoadContent = () => {
                   type="text"
                   id="selector"
                   value={selector}
-                  onChange={(e) => setSelector(e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setSelector(e.target.value)
+                  }
                   placeholder=".load-more-button, #loadMore"
                   className="w-full pl-10 px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   disabled={loading}
@@ -127,7 +223,9 @@ const ClickingButtonsToLoadContent = () => {
                 type="number"
                 id="maxClicks"
                 value={maxClicks}
-                onChange={(e) => setMaxClicks(parseInt(e.target.value))}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setMaxClicks(parseInt(e.target.value))
+                }
                 min="1"
                 max="20"
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
@@ -185,43 +283,62 @@ const ClickingButtonsToLoadContent = () => {
               className="mt-8 space-y-6"
             >
               <h2 className="text-2xl font-semibold mb-4">Loaded Content</h2>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-sm font-medium text-blue-800">
-                      Total Clicks: {result.clickCount}
-                    </p>
-                  </div>
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-sm font-medium text-blue-800">
-                      Items Found: {result.totalItems}
-                    </p>
-                  </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-blue-800">
+                    Pages Loaded: {result.clickCount + 1}
+                  </p>
                 </div>
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <p className="text-sm font-medium text-blue-800">
+                    Items Found: {result.totalItems}
+                  </p>
+                </div>
+              </div>
 
-                <div className="border rounded-lg divide-y">
-                  {result.items.map((item, index) => (
-                    <div key={index} className="p-4">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-gray-500">
-                          Item {index + 1}
-                        </span>
-                        <span className="text-xs text-gray-400">
-                          Classes: {item.classes.join(", ")}
-                        </span>
+              <div className="border rounded-lg divide-y">
+                {result.items.map((item, index) => (
+                  <div key={index} className="p-4 hover:bg-gray-50">
+                    <div className="space-y-2">
+                      {item.structured.title && (
+                        <h3 className="font-medium text-lg">
+                          {item.structured.title}
+                        </h3>
+                      )}
+                      {item.structured.description && (
+                        <p className="text-gray-600">
+                          {item.structured.description}
+                        </p>
+                      )}
+                      <div className="flex flex-wrap gap-4 text-sm text-gray-500">
+                        {item.structured.author && (
+                          <span className="flex items-center">
+                            <span className="font-medium">By:</span>
+                            <span className="ml-1">
+                              {item.structured.author}
+                            </span>
+                          </span>
+                        )}
+                        {item.structured.date && (
+                          <span className="flex items-center">
+                            <span className="font-medium">Date:</span>
+                            <span className="ml-1">{item.structured.date}</span>
+                          </span>
+                        )}
+                        {item.structured.link && (
+                          <a
+                            href={item.structured.link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            View Source →
+                          </a>
+                        )}
                       </div>
-                      <p className="mt-2 text-gray-700">{item.text}</p>
-                      <details className="mt-2">
-                        <summary className="text-sm text-blue-600 cursor-pointer">
-                          View HTML
-                        </summary>
-                        <pre className="mt-2 p-2 bg-gray-50 rounded text-xs overflow-x-auto">
-                          {item.html}
-                        </pre>
-                      </details>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </div>
             </motion.div>
           )}

@@ -1,7 +1,6 @@
 "use client";
 
-import "../app/globals.css";
-import React, { useState } from "react";
+import React, { useState, FormEvent, ChangeEvent } from "react";
 import {
   Loader2,
   AlertCircle,
@@ -11,13 +10,35 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Breadcrumb } from "@/components/ui/breadcrumb";
+
+interface CrawlResult {
+  url: string;
+  status: "success" | "error";
+  title?: string;
+  description?: string;
+  h1s: string[];
+  links: string[];
+  linkData?: { href: string; text: string }[];
+  error?: string;
+}
 
 const AsyncWebCrawling = () => {
-  const [urls, setUrls] = useState([""]);
-  const [results, setResults] = useState(null);
+  const [urls, setUrls] = useState<string[]>([""]);
+  const [results, setResults] = useState<CrawlResult[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
+
+  const breadcrumbItems = [
+    { label: "Home", href: "/" },
+    { label: "Examples", href: "/examples" },
+    {
+      label: "Asynchronous Web Crawling",
+      href: "/use-cases/async-web-crawling",
+      active: true,
+    },
+  ];
 
   const addUrlField = () => {
     if (urls.length < 10) {
@@ -25,20 +46,20 @@ const AsyncWebCrawling = () => {
     }
   };
 
-  const removeUrlField = (index) => {
+  const removeUrlField = (index: number) => {
     if (urls.length > 1) {
       const newUrls = urls.filter((_, i) => i !== index);
       setUrls(newUrls);
     }
   };
 
-  const handleUrlChange = (index, value) => {
+  const handleUrlChange = (index: number, value: string) => {
     const newUrls = [...urls];
     newUrls[index] = value;
     setUrls(newUrls);
   };
 
-  const handleSubmit = async (event) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
     setError(null);
@@ -71,7 +92,11 @@ const AsyncWebCrawling = () => {
       setResults(data.data);
       setSuccessMessage(`Successfully crawled ${data.data.length} URLs`);
     } catch (error) {
-      setError(error.message);
+      if (error instanceof Error) {
+        setError(error.message);
+      } else {
+        setError("An unexpected error occurred");
+      }
     } finally {
       setLoading(false);
     }
@@ -80,6 +105,7 @@ const AsyncWebCrawling = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-12">
+        <Breadcrumb items={breadcrumbItems} />
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -107,7 +133,9 @@ const AsyncWebCrawling = () => {
                   <input
                     type="url"
                     value={url}
-                    onChange={(e) => handleUrlChange(index, e.target.value)}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                      handleUrlChange(index, e.target.value)
+                    }
                     placeholder="https://example.com"
                     className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     disabled={loading}
@@ -118,6 +146,8 @@ const AsyncWebCrawling = () => {
                       onClick={() => removeUrlField(index)}
                       className="p-2 text-red-500 hover:text-red-700"
                       disabled={loading}
+                      title="Remove URL"
+                      aria-label="Remove URL"
                     >
                       <X className="h-5 w-5" />
                     </button>
@@ -225,17 +255,17 @@ const AsyncWebCrawling = () => {
                       <div className="space-y-2">
                         <p>
                           <span className="font-medium">Title:</span>{" "}
-                          {result.title}
+                          {result?.title}
                         </p>
                         <p>
                           <span className="font-medium">Description:</span>{" "}
-                          {result.description}
+                          {result?.description}
                         </p>
-                        {result.h1s.length > 0 && (
+                        {(result?.h1s?.length || 0) > 0 && (
                           <div>
                             <span className="font-medium">H1 Headers:</span>
                             <ul className="list-disc list-inside ml-4">
-                              {result.h1s.map((h1, i) => (
+                              {result?.h1s?.map((h1: string, i: number) => (
                                 <li key={i}>{h1}</li>
                               ))}
                             </ul>
@@ -243,8 +273,22 @@ const AsyncWebCrawling = () => {
                         )}
                         <div>
                           <span className="font-medium">
-                            Links Found: {result.links.length}
+                            Links Found: {result?.linkData?.length || 0}
                           </span>
+                          <ul className="list-disc list-inside ml-4">
+                            {result.linkData?.map((link, index) => (
+                              <li key={index}>
+                                <a
+                                  href={link.href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:text-blue-800"
+                                >
+                                  {link.text}
+                                </a>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       </div>
                     ) : (

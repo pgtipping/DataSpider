@@ -1,7 +1,6 @@
 "use client";
 
-import "../app/globals.css";
-import React, { useState } from "react";
+import React, { useState, FormEvent, ChangeEvent } from "react";
 import {
   Loader2,
   AlertCircle,
@@ -12,21 +11,46 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
+interface ExportOptions {
+  width: number;
+  height: number;
+  scale: number;
+  fullPage: boolean;
+}
+
+interface ScreenshotData {
+  type: "screenshot";
+  image: string;
+}
+
+interface ScreenshotResponse {
+  success: boolean;
+  data?: {
+    type: "screenshot";
+    format: "base64";
+    image: string;
+  };
+  error?: string;
+  timestamp: string;
+}
+
+type ExportType = "screenshot" | "pdf";
+
 const ScreenshotAndPDFExport = () => {
   const [url, setUrl] = useState("");
-  const [type, setType] = useState("screenshot");
-  const [options, setOptions] = useState({
+  const [type, setType] = useState<ExportType>("screenshot");
+  const [options, setOptions] = useState<ExportOptions>({
     width: 1920,
     height: 1080,
     scale: 1,
     fullPage: true,
   });
-  const [result, setResult] = useState(null);
+  const [result, setResult] = useState<ScreenshotData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
 
-  const handleSubmit = async (event) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
     setError(null);
@@ -49,32 +73,49 @@ const ScreenshotAndPDFExport = () => {
       });
 
       if (type === "pdf") {
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to generate PDF");
+        }
+
         const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
+        const downloadUrl = window.URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url;
+        a.href = downloadUrl;
         a.download = "webpage.pdf";
         document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
+        window.URL.revokeObjectURL(downloadUrl);
         document.body.removeChild(a);
         setSuccessMessage("PDF generated and downloaded successfully!");
       } else {
-        const data = await response.json();
+        const data = (await response.json()) as ScreenshotResponse;
         if (!response.ok) {
-          throw new Error(data.error || "Failed to capture content");
+          throw new Error(data.error || "Failed to capture screenshot");
         }
-        setResult(data.data);
+        if (!data.data?.image) {
+          throw new Error("No screenshot data received");
+        }
+        setResult({
+          type: "screenshot",
+          image: data.data.image,
+        });
         setSuccessMessage("Screenshot captured successfully!");
       }
     } catch (error) {
-      setError(error.message);
+      console.error("Export error:", error);
+      setError(
+        error instanceof Error ? error.message : "An unexpected error occurred"
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const handleOptionChange = (name, value) => {
+  const handleOptionChange = (
+    name: keyof ExportOptions,
+    value: number | boolean
+  ) => {
     setOptions((prev) => ({
       ...prev,
       [name]: value,
@@ -110,7 +151,9 @@ const ScreenshotAndPDFExport = () => {
                 type="url"
                 id="url"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  setUrl(e.target.value)
+                }
                 placeholder="https://example.com"
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 disabled={loading}
@@ -160,8 +203,11 @@ const ScreenshotAndPDFExport = () => {
                       <input
                         type="number"
                         value={options.width}
-                        onChange={(e) =>
-                          handleOptionChange("width", parseInt(e.target.value))
+                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                          handleOptionChange(
+                            "width",
+                            parseInt(e.target.value, 10)
+                          )
                         }
                         placeholder="Width"
                         className="px-4 py-2 border border-gray-300 rounded-md"
@@ -169,8 +215,11 @@ const ScreenshotAndPDFExport = () => {
                       <input
                         type="number"
                         value={options.height}
-                        onChange={(e) =>
-                          handleOptionChange("height", parseInt(e.target.value))
+                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                          handleOptionChange(
+                            "height",
+                            parseInt(e.target.value, 10)
+                          )
                         }
                         placeholder="Height"
                         className="px-4 py-2 border border-gray-300 rounded-md"
@@ -179,18 +228,24 @@ const ScreenshotAndPDFExport = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      className="block text-sm font-medium text-gray-700 mb-2"
+                      htmlFor="scaleFactor"
+                    >
                       Scale Factor
                     </label>
                     <input
+                      id="scaleFactor"
                       type="number"
                       value={options.scale}
-                      onChange={(e) =>
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
                         handleOptionChange("scale", parseFloat(e.target.value))
                       }
                       step="0.1"
                       min="0.1"
                       max="3"
+                      placeholder="Enter scale factor (0.1 - 3.0)"
+                      title="Scale factor for the screenshot (between 0.1 and 3.0)"
                       className="px-4 py-2 border border-gray-300 rounded-md"
                     />
                   </div>
@@ -200,7 +255,7 @@ const ScreenshotAndPDFExport = () => {
                       type="checkbox"
                       id="fullPage"
                       checked={options.fullPage}
-                      onChange={(e) =>
+                      onChange={(e: ChangeEvent<HTMLInputElement>) =>
                         handleOptionChange("fullPage", e.target.checked)
                       }
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -268,7 +323,7 @@ const ScreenshotAndPDFExport = () => {
             </motion.div>
           )}
 
-          {result && result.type === "screenshot" && (
+          {result?.type === "screenshot" && result.image && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
