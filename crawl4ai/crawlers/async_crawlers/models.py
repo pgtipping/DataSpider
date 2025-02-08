@@ -1,51 +1,31 @@
-from pydantic import BaseModel
-from typing import Optional, Dict, Any, Callable
-from enum import Enum
+from pydantic import BaseModel, ConfigDict
+from typing import Any, Dict, Optional, List, Union
+from datetime import datetime
 
-class AsyncCrawlResponse(BaseModel):
-    html: str
-    response_headers: Dict[str, str]
+class CrawlResponse(BaseModel):
+    content: str
     status_code: int
-    screenshot: Optional[str] = None
-    pdf_data: Optional[bytes] = None
-    get_delayed_content: Optional[Callable[[], Any]] = None
-    ssl_certificate: Optional[Any] = None
-    downloaded_files: Optional[list] = None
-
-class CrawlResult(BaseModel):
     url: str
-    html: Optional[str] = None
-    text: Optional[str] = None
-    screenshot_path: Optional[str] = None
     metadata: Dict[str, Any] = {}
     
-    def to_dict(self):
-        return self.dict()
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+class CrawlResult(CrawlResponse):
+    """Extends base response with crawl-specific metadata"""
+    load_time: float
+    screenshot: Optional[bytes] = None
+    dom: Optional[str] = None
 
 class MarkdownGenerationResult(BaseModel):
-    url: str
     markdown: str
-    summary: Optional[str] = None
-    sections: Dict[str, str] = {}
-    
-    def to_dict(self):
-        return self.dict()
-
-class CrawlerTaskResult(BaseModel):
-    task_id: str
-    status: str
-    result: Optional[CrawlResult] = None
-    error: Optional[str] = None
-    timestamp: float
-
-class DispatchResult(BaseModel):
-    task_id: str
-    status: str
-    url: str
-    callback_url: Optional[str] = None
     metadata: Dict[str, Any] = {}
 
-class CacheMode(str, Enum):
-    MEMORY = "memory"
-    DISK = "disk"
-    NONE = "none"
+class CrawlerTaskResult(BaseModel):
+    url: str
+    results: List[Union[CrawlResult, MarkdownGenerationResult]]
+    error: Optional[str] = None
+
+class DispatchResult(BaseModel):
+    strategy_used: str
+    results: List[CrawlerTaskResult]
+    timestamp: datetime = datetime.now()

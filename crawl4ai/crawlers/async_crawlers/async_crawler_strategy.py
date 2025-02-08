@@ -15,7 +15,7 @@ from PIL import Image, ImageDraw, ImageFont
 import hashlib
 import uuid
 from crawl4ai.js_snippet import load_js_script
-from crawl4ai.crawlers.async_crawlers.models import AsyncCrawlResponse
+from crawl4ai.crawlers.async_crawlers.models import CrawlResponse, AsyncCrawlResponse
 from .utils import get_error_context
 from .user_agent_generator import UserAgentGenerator
 from .config import SCREENSHOT_HEIGHT_TRESHOLD, DOWNLOAD_PAGE_TIMEOUT

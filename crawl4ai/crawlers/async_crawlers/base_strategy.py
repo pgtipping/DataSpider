@@ -18,5 +18,8 @@ class BaseStrategy(ABC):
             config: Optional runtime configuration overriding initial config
         Returns:
             CrawlResponse containing results and metadata
+        Raises:
+            NotImplementedError: If subclass doesn't implement this method
+            RuntimeError: For execution errors with detailed context
         """
         pass
