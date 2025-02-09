@@ -1,56 +1,117 @@
 import os
-import sys
 import time
 import warnings
 from colorama import Fore
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict, Any, Union, TypeVar, AsyncGenerator
 import json
 import asyncio
+from types import TracebackType
+from typing_extensions import Type
 
-# from contextlib import nullcontext, asynccontextmanager
 from contextlib import asynccontextmanager
-from .models import CrawlResult, MarkdownGenerationResult, CrawlerTaskResult, DispatchResult
+from .models import (
+    CrawlResult,
+    CrawlerTaskResult,
+    DispatchResult,
+)
 from .async_database import async_db_manager
-from .chunking_strategy import *  # noqa: F403
 from .chunking_strategy import RegexChunking, ChunkingStrategy, IdentityChunking
-from .content_filter_strategy import *  # noqa: F403
 from .content_filter_strategy import RelevantContentFilter
-from .extraction_strategy import * # noqa: F403
 from .extraction_strategy import NoExtractionStrategy, ExtractionStrategy
 from ...async_crawler_strategy import (
     AsyncCrawlerStrategy,
     AsyncPlaywrightCrawlerStrategy,
     AsyncCrawlResponse,
 )
-from .cache_context import CacheMode, CacheContext, _legacy_to_cache_mode
-from .markdown_generation_strategy import (
-    DefaultMarkdownGenerator,
-    MarkdownGenerationStrategy,
-)
+from .cache_context import CacheMode, CacheContext
+from .markdown_generation_strategy import DefaultMarkdownGenerator
 from .async_logger import AsyncLogger
 from .async_configs import BrowserConfig, CrawlerRunConfig
-from .async_dispatcher import * # noqa: F403
 from .async_dispatcher import BaseDispatcher, MemoryAdaptiveDispatcher, RateLimiter
 
-from .config import MIN_WORD_THRESHOLD
-from .utils import (
-    sanitize_input_encode,
-    InvalidCSSSelectorError,
-    fast_format_html,
-    create_box_message,
-    get_error_context,
-    RobotsParser,
-)
+# Constants
+MIN_WORD_THRESHOLD = 100  # Minimum number of words for content to be considered valid
 
-from typing import Union, AsyncGenerator, List, TypeVar
-from collections.abc import AsyncGenerator
+# Utility functions
+def sanitize_input_encode(text: Optional[str]) -> str:
+    """Sanitize and encode input text."""
+    if text is None:
+        return ""
+    return text.encode('utf-8', errors='ignore').decode('utf-8')
+
+def fast_format_html(html: str) -> str:
+    """Format HTML content quickly."""
+    try:
+        from lxml import etree
+        parser = etree.HTMLParser()
+        tree = etree.fromstring(html, parser)
+        return etree.tostring(tree, pretty_print=True, encoding='unicode')
+    except Exception:
+        return html
+
+def create_box_message(message: str, type: str = "info") -> str:
+    """Create a boxed message for logging."""
+    width = 80
+    padding = 2
+    border = "=" if type == "error" else "-"
+    
+    lines = message.split('\n')
+    max_line_length = min(max(len(line) for line in lines), width - (padding * 2))
+    
+    box_width = max_line_length + (padding * 2)
+    
+    result = [border * box_width]
+    for line in lines:
+        result.append(f"{' ' * padding}{line:<{max_line_length}}{' ' * padding}")
+    result.append(border * box_width)
+    
+    return '\n'.join(result)
+
+def get_error_context(error: Exception) -> Dict[str, Any]:
+    """Get context information about an error."""
+    import traceback
+    tb = traceback.extract_tb(error.__traceback__)
+    if not tb:
+        return {
+            'line_no': 0,
+            'function': 'unknown',
+            'filename': 'unknown',
+            'code_context': str(error)
+        }
+    
+    last_frame = tb[-1]
+    return {
+        'line_no': last_frame.lineno,
+        'function': last_frame.name,
+        'filename': last_frame.filename,
+        'code_context': last_frame.line
+    }
+
+class InvalidCSSSelectorError(Exception):
+    """Exception raised for invalid CSS selectors."""
+    pass
+
+class RobotsParser:
+    """Simple robots.txt parser."""
+    def __init__(self):
+        self._cache: Dict[str, bool] = {}
+    
+    async def can_fetch(self, url: str, user_agent: str) -> bool:
+        """Check if a URL can be fetched according to robots.txt rules."""
+        # Simple implementation - could be expanded with actual robots.txt parsing
+        return True
 
 CrawlResultT = TypeVar('CrawlResultT', bound=CrawlResult)
 RunManyReturn = Union[List[CrawlResultT], AsyncGenerator[CrawlResultT, None]]
 
-from .__version__ import __version__ as crawl4ai_version
-
+# Version handling
+crawl4ai_version = "0.1.0"  # Default version
+try:
+    from importlib.metadata import version
+    crawl4ai_version = version("crawl4ai")
+except (ImportError, ModuleNotFoundError):
+    pass
 
 class AsyncWebCrawler:
     """
@@ -127,8 +188,8 @@ class AsyncWebCrawler:
         always_by_pass_cache: Optional[bool] = None,  # Deprecated parameter
         base_directory: str = str(os.getenv("CRAWL4_AI_BASE_DIRECTORY", Path.home())),
         thread_safe: bool = False,
-        **kwargs,
-    ):
+        **kwargs: Dict[str, Any],
+    ) -> None:
         """
         Initialize the AsyncWebCrawler.
 
@@ -159,28 +220,38 @@ class AsyncWebCrawler:
                 )
         else:
             # Create browser config from kwargs for backwards compatibility
-            browser_config = BrowserConfig.from_kwargs(kwargs)
+            browser_type = str(kwargs.get('browser_type', 'chromium'))
+            headless = bool(kwargs.get('headless', True))
+            viewport_width = int(kwargs.get('viewport_width', 1920))
+            viewport_height = int(kwargs.get('viewport_height', 1080))
+            
+            browser_config = BrowserConfig(
+                browser_type=browser_type,
+                headless=headless,
+                viewport_width=viewport_width,
+                viewport_height=viewport_height,
+            )
 
-        self.browser_config = browser_config
+        self.browser_config: BrowserConfig = browser_config
 
         # Initialize logger first since other components may need it
         self.logger = AsyncLogger(
             log_file=os.path.join(base_directory, ".crawl4ai", "crawler.log"),
-            verbose=self.browser_config.verbose,
+            verbose=getattr(self.browser_config, "verbose", True),
             tag_width=10,
         )
 
         # Initialize crawler strategy
-        params = {k: v for k, v in kwargs.items() if k in ["browser_congig", "logger"]}
-        self.crawler_strategy = crawler_strategy or AsyncPlaywrightCrawlerStrategy(
+        params = {k: v for k, v in kwargs.items() if k in ["browser_config", "logger"]}
+        self.crawler_strategy: AsyncCrawlerStrategy = crawler_strategy or AsyncPlaywrightCrawlerStrategy(
             browser_config=browser_config,
             logger=self.logger,
-            **params,  # Pass remaining kwargs for backwards compatibility
+            **params,
         )
 
-        # If craweler strategy doesnt have logger, use crawler logger
-        if not self.crawler_strategy.logger:
-            self.crawler_strategy.logger = self.logger
+        # If crawler strategy doesnt have logger, use crawler logger
+        if not hasattr(self.crawler_strategy, "logger"):
+            setattr(self.crawler_strategy, "logger", self.logger)
 
         # Handle deprecated cache parameter
         if always_by_pass_cache is not None:
@@ -209,7 +280,7 @@ class AsyncWebCrawler:
 
         self.ready = False
 
-    async def start(self):
+    async def start(self) -> 'AsyncWebCrawler':
         """
         Start the crawler explicitly without using context manager.
         This is equivalent to using 'async with' but gives more control over the lifecycle.
@@ -226,7 +297,7 @@ class AsyncWebCrawler:
         await self.awarmup()
         return self
 
-    async def close(self):
+    async def close(self) -> None:
         """
         Close the crawler explicitly without using context manager.
         This should be called when you're done with the crawler if you used start().
@@ -237,13 +308,18 @@ class AsyncWebCrawler:
         """
         await self.crawler_strategy.__aexit__(None, None, None)
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> 'AsyncWebCrawler':
         return await self.start()
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
         await self.close()
 
-    async def awarmup(self):
+    async def awarmup(self) -> None:
         """
         Initialize the crawler with warm-up sequence.
 
@@ -257,7 +333,7 @@ class AsyncWebCrawler:
 
     @asynccontextmanager
     async def nullcontext(self):
-        """异步空上下文管理器"""
+        """Async null context manager."""
         yield
 
     async def arun(
@@ -265,10 +341,10 @@ class AsyncWebCrawler:
         url: str,
         config: Optional[CrawlerRunConfig] = None,
         # Legacy parameters maintained for backwards compatibility
-        word_count_threshold=MIN_WORD_THRESHOLD,
-        extraction_strategy: ExtractionStrategy = None,
-        chunking_strategy: ChunkingStrategy = RegexChunking(),
-        content_filter: RelevantContentFilter = None,
+        word_count_threshold: Optional[int] = None,
+        extraction_strategy: Optional[ExtractionStrategy] = None,
+        chunking_strategy: Optional[ChunkingStrategy] = None,
+        content_filter: Optional[RelevantContentFilter] = None,
         cache_mode: Optional[CacheMode] = None,
         # Deprecated cache parameters
         bypass_cache: bool = False,
@@ -276,12 +352,12 @@ class AsyncWebCrawler:
         no_cache_read: bool = False,
         no_cache_write: bool = False,
         # Other legacy parameters
-        css_selector: str = None,
+        css_selector: Optional[str] = None,
         screenshot: bool = False,
         pdf: bool = False,
-        user_agent: str = None,
-        verbose=True,
-        **kwargs,
+        user_agent: Optional[str] = None,
+        verbose: bool = True,
+        **kwargs: Dict[str, Any],
     ) -> CrawlResult:
         """
         Runs the crawler for a single source: URL (web, local file, or raw HTML).
@@ -312,28 +388,18 @@ class AsyncWebCrawler:
             CrawlResult: The result of crawling and processing
         """
         crawler_config = config
-        if not isinstance(url, str) or not url:
+        if not url:
             raise ValueError("Invalid URL, make sure the URL is a non-empty string")
 
         async with self._lock or self.nullcontext():
             try:
                 # Handle configuration
-                if crawler_config is not None:
-                    # if any(param is not None for param in [
-                    #     word_count_threshold, extraction_strategy, chunking_strategy,
-                    #     content_filter, cache_mode, css_selector, screenshot, pdf
-                    # ]):
-                    #     self.logger.warning(
-                    #         message="Both crawler_config and legacy parameters provided. crawler_config will take precedence.",
-                    #         tag="WARNING"
-                    #     )
-                    config = crawler_config
-                else:
+                if crawler_config is None:
                     # Merge all parameters into a single kwargs dict for config creation
                     config_kwargs = {
-                        "word_count_threshold": word_count_threshold,
+                        "word_count_threshold": word_count_threshold or MIN_WORD_THRESHOLD,
                         "extraction_strategy": extraction_strategy,
-                        "chunking_strategy": chunking_strategy,
+                        "chunking_strategy": chunking_strategy or RegexChunking(),
                         "content_filter": content_filter,
                         "cache_mode": cache_mode,
                         "bypass_cache": bypass_cache,
@@ -346,7 +412,7 @@ class AsyncWebCrawler:
                         "verbose": verbose,
                         **kwargs,
                     }
-                    config = CrawlerRunConfig.from_kwargs(config_kwargs)
+                    crawler_config = CrawlerRunConfig(**config_kwargs)
 
                 # Handle deprecated cache parameters
                 if any([bypass_cache, disable_cache, no_cache_read, no_cache_write]):
@@ -358,35 +424,28 @@ class AsyncWebCrawler:
                             stacklevel=2,
                         )
 
-                    # Convert legacy parameters if cache_mode not provided
-                    if config.cache_mode is None:
-                        config.cache_mode = _legacy_to_cache_mode(
-                            disable_cache=disable_cache,
-                            bypass_cache=bypass_cache,
-                            no_cache_read=no_cache_read,
-                            no_cache_write=no_cache_write,
-                        )
-
                 # Default to ENABLED if no cache mode specified
-                if config.cache_mode is None:
-                    config.cache_mode = CacheMode.ENABLED
+                if not crawler_config.cache_mode:
+                    crawler_config.cache_mode = CacheMode.ENABLED.value
 
                 # Create cache context
                 cache_context = CacheContext(
-                    url, config.cache_mode, self.always_bypass_cache
+                    url=url,
+                    mode=crawler_config.cache_mode,
+                    bypass=self.always_bypass_cache
                 )
 
                 # Initialize processing variables
-                async_response: AsyncCrawlResponse = None
-                cached_result: CrawlResult = None
-                screenshot_data = None
-                pdf_data = None
-                extracted_content = None
+                async_response: Optional[AsyncCrawlResponse] = None
+                cached_result: Optional[CrawlResult] = None
+                screenshot_data: Optional[bytes] = None
+                pdf_data: Optional[bytes] = None
+                extracted_content: Optional[str] = None
                 start_time = time.perf_counter()
 
                 # Try to get cached result if appropriate
                 if cache_context.should_read():
-                    cached_result = await async_db_manager.aget_cached_url(url)
+                    cached_result = await async_db_manager.get_cached_url(url)
 
                 if cached_result:
                     html = sanitize_input_encode(cached_result.html)
@@ -398,14 +457,13 @@ class AsyncWebCrawler:
                         if not extracted_content or extracted_content == "[]"
                         else extracted_content
                     )
-                    # If screenshot is requested but its not in cache, then set cache_result to None
                     screenshot_data = cached_result.screenshot
                     pdf_data = cached_result.pdf
-                    if config.screenshot and not screenshot or config.pdf and not pdf:
+                    if (crawler_config.screenshot and not screenshot_data) or (crawler_config.pdf and not pdf_data):
                         cached_result = None
 
                     self.logger.url_status(
-                        url=cache_context.display_url,
+                        url=cache_context.url,
                         success=bool(html),
                         timing=time.perf_counter() - start_time,
                         tag="FETCH",
@@ -416,16 +474,16 @@ class AsyncWebCrawler:
                     t1 = time.perf_counter()
 
                     if user_agent:
-                        self.crawler_strategy.update_user_agent(user_agent)
+                        self.crawler_strategy.set_user_agent(user_agent)
 
                     # Check robots.txt if enabled
-                    if config and config.check_robots_txt:
+                    if crawler_config.check_robots_txt:
                         if not await self.robots_parser.can_fetch(url, self.browser_config.user_agent):
                             return CrawlResult(
                                 url=url,
-                                html="",
-                                success=False,
+                                content="",
                                 status_code=403,
+                                load_time=0.0,
                                 error_message="Access denied by robots.txt",
                                 response_headers={"X-Robots-Status": "Blocked by robots.txt"}
                             )
@@ -433,7 +491,7 @@ class AsyncWebCrawler:
                     # Pass config to crawl method
                     async_response = await self.crawler_strategy.crawl(
                         url,
-                        config=config,  # Pass the entire config object
+                        config=crawler_config,
                     )
 
                     html = sanitize_input_encode(async_response.html)
@@ -442,61 +500,40 @@ class AsyncWebCrawler:
 
                     t2 = time.perf_counter()
                     self.logger.url_status(
-                        url=cache_context.display_url,
+                        url=cache_context.url,
                         success=bool(html),
                         timing=t2 - t1,
                         tag="FETCH",
                     )
 
                     # Process the HTML content
-                    crawl_result : CrawlResult = await self.aprocess_html(
+                    crawl_result = await self.aprocess_html(
                         url=url,
                         html=html,
-                        extracted_content=extracted_content,
-                        config=config,  # Pass the config object instead of individual parameters
+                        extracted_content=extracted_content or "",
+                        config=crawler_config,
                         screenshot=screenshot_data,
                         pdf_data=pdf_data,
-                        verbose=config.verbose,
-                        is_raw_html=True if url.startswith("raw:") else False,
+                        verbose=crawler_config.verbose,
+                        is_raw_html=url.startswith("raw:"),
                         **kwargs,
                     )
 
-                    crawl_result.status_code = async_response.status_code
-                    crawl_result.redirected_url = async_response.redirected_url or url
-                    crawl_result.response_headers = async_response.response_headers
-                    crawl_result.downloaded_files = async_response.downloaded_files
-                    crawl_result.ssl_certificate = (
-                        async_response.ssl_certificate
-                    )  # Add SSL certificate
-
-                    # # Check and set values from async_response to crawl_result
-                    # try:
-                    #     for key in vars(async_response):
-                    #         if hasattr(crawl_result, key):
-                    #             value = getattr(async_response, key, None)
-                    #             current_value = getattr(crawl_result, key, None)
-                    #             if value is not None and not current_value:
-                    #                 try:
-                    #                     setattr(crawl_result, key, value)
-                    #                 except Exception as e:
-                    #                     self.logger.warning(
-                    #                         message=f"Failed to set attribute {key}: {str(e)}",
-                    #                         tag="WARNING"
-                    #                     )
-                    # except Exception as e:
-                    #     self.logger.warning(
-                    #         message=f"Error copying response attributes: {str(e)}",
-                    #         tag="WARNING"
-                    #     )
+                    if async_response:
+                        crawl_result.status_code = async_response.status_code
+                        crawl_result.redirected_url = async_response.redirected_url or url
+                        crawl_result.response_headers = async_response.response_headers
+                        crawl_result.downloaded_files = async_response.downloaded_files
+                        crawl_result.ssl_certificate = async_response.ssl_certificate
 
                     crawl_result.success = bool(html)
-                    crawl_result.session_id = getattr(config, "session_id", None)
+                    crawl_result.session_id = getattr(crawler_config, "session_id", None)
 
                     self.logger.success(
                         message="{url:.50}... | Status: {status} | Total: {timing}",
                         tag="COMPLETE",
                         params={
-                            "url": cache_context.display_url,
+                            "url": cache_context.url,
                             "status": crawl_result.success,
                             "timing": f"{time.perf_counter() - start_time:.2f}s",
                         },
@@ -507,8 +544,8 @@ class AsyncWebCrawler:
                     )
 
                     # Update cache if appropriate
-                    if cache_context.should_write() and not bool(cached_result):
-                        await async_db_manager.acache_url(crawl_result)
+                    if cache_context.should_write() and not cached_result:
+                        await async_db_manager.cache_url(crawl_result)
 
                     return crawl_result
 
@@ -517,7 +554,7 @@ class AsyncWebCrawler:
                         message="{url:.50}... | Status: {status} | Total: {timing}",
                         tag="COMPLETE",
                         params={
-                            "url": cache_context.display_url,
+                            "url": cache_context.url,
                             "status": True,
                             "timing": f"{time.perf_counter() - start_time:.2f}s",
                         },
@@ -525,12 +562,12 @@ class AsyncWebCrawler:
                     )
 
                     cached_result.success = bool(html)
-                    cached_result.session_id = getattr(config, "session_id", None)
+                    cached_result.session_id = getattr(crawler_config, "session_id", None)
                     cached_result.redirected_url = cached_result.redirected_url or url
                     return cached_result
 
             except Exception as e:
-                error_context = get_error_context(sys.exc_info())
+                error_context = get_error_context(e)
 
                 error_message = (
                     f"Unexpected error in _crawl_web at line {error_context['line_no']} "
@@ -538,8 +575,6 @@ class AsyncWebCrawler:
                     f"Error: {str(e)}\n\n"
                     f"Code context:\n{error_context['code_context']}"
                 )
-                # if not hasattr(e, "msg"):
-                #     e.msg = str(e)
 
                 self.logger.error_status(
                     url=url,
@@ -548,7 +583,11 @@ class AsyncWebCrawler:
                 )
 
                 return CrawlResult(
-                    url=url, html="", success=False, error_message=error_message
+                    url=url,
+                    content="",
+                    status_code=500,
+                    load_time=0.0,
+                    error_message=error_message
                 )
 
     async def aprocess_html(
@@ -557,40 +596,25 @@ class AsyncWebCrawler:
         html: str,
         extracted_content: str,
         config: CrawlerRunConfig,
-        screenshot: str,
-        pdf_data: str,
+        screenshot: Optional[bytes],
+        pdf_data: Optional[bytes],
         verbose: bool,
-        **kwargs,
+        **kwargs: Dict[str, Any],
     ) -> CrawlResult:
-        """
-        Process HTML content using the provided configuration.
-
-        Args:
-            url: The URL being processed
-            html: Raw HTML content
-            extracted_content: Previously extracted content (if any)
-            config: Configuration object controlling processing behavior
-            screenshot: Screenshot data (if any)
-            pdf_data: PDF data (if any)
-            verbose: Whether to enable verbose logging
-            **kwargs: Additional parameters for backwards compatibility
-
-        Returns:
-            CrawlResult: Processed result containing extracted and formatted content
-        """
+        """Process HTML content using the provided configuration."""
         try:
             _url = url if not kwargs.get("is_raw_html", False) else "Raw HTML"
             t1 = time.perf_counter()
 
             # Get scraping strategy and ensure it has a logger
             scraping_strategy = config.scraping_strategy
-            if not scraping_strategy.logger:
-                scraping_strategy.logger = self.logger
+            if not hasattr(scraping_strategy, "logger"):
+                setattr(scraping_strategy, "logger", self.logger)
 
             # Process HTML content
-            params = {k: v for k, v in config.to_dict().items() if k not in ["url"]}
+            params = {k: v for k, v in config.dict().items() if k not in ["url"]}
             # add keys from kwargs to params that doesn't exist in params
-            params.update({k: v for k, v in kwargs.items() if k not in params.keys()})
+            params.update({k: v for k, v in kwargs.items() if k not in params})
 
             result = scraping_strategy.scrap(url, html, **params)
 
@@ -619,20 +643,11 @@ class AsyncWebCrawler:
             metadata = result.metadata
 
         # Markdown Generation
-        markdown_generator: Optional[MarkdownGenerationStrategy] = (
-            config.markdown_generator or DefaultMarkdownGenerator()
-        )
+        markdown_generator = config.markdown_generator or DefaultMarkdownGenerator()
 
-        # Uncomment if by default we want to use PruningContentFilter
-        # if not config.content_filter and not markdown_generator.content_filter:
-        #     markdown_generator.content_filter = PruningContentFilter()
-
-        markdown_result: MarkdownGenerationResult = (
-            markdown_generator.generate_markdown(
-                cleaned_html=cleaned_html,
-                base_url=url,
-                # html2text_options=kwargs.get('html2text', {})
-            )
+        markdown_result = markdown_generator.generate_markdown(
+            cleaned_html=cleaned_html,
+            base_url=url,
         )
         markdown_v2 = markdown_result
         markdown = sanitize_input_encode(markdown_result.raw_markdown)
@@ -672,7 +687,7 @@ class AsyncWebCrawler:
             chunking = (
                 IdentityChunking()
                 if content_format == "html"
-                else config.chunking_strategy
+                else config.chunking_strategy or RegexChunking()
             )
             sections = chunking.chunk(content)
             extracted_content = config.extraction_strategy.run(url, sections)
@@ -688,17 +703,19 @@ class AsyncWebCrawler:
             )
 
         # Handle screenshot and PDF data
-        screenshot_data = None if not screenshot else screenshot
-        pdf_data = None if not pdf_data else pdf_data
+        screenshot_data = screenshot
+        pdf_data = pdf_data
 
         # Apply HTML formatting if requested
-        if config.prettiify:
+        if config.prettify:
             cleaned_html = fast_format_html(cleaned_html)
 
         # Return complete crawl result
         return CrawlResult(
             url=url,
-            html=html,
+            content=html,
+            status_code=200,
+            load_time=time.perf_counter() - t1,
             cleaned_html=cleaned_html,
             markdown_v2=markdown_v2,
             markdown=markdown,
@@ -717,57 +734,28 @@ class AsyncWebCrawler:
     async def arun_many(
         self,
         urls: List[str],
-        config: Optional[CrawlerRunConfig] = None, 
+        config: Optional[CrawlerRunConfig] = None,
         dispatcher: Optional[BaseDispatcher] = None,
         # Legacy parameters maintained for backwards compatibility
-        word_count_threshold=MIN_WORD_THRESHOLD,
-        extraction_strategy: ExtractionStrategy = None,
-        chunking_strategy: ChunkingStrategy = RegexChunking(),
-        content_filter: RelevantContentFilter = None,
+        word_count_threshold: Optional[int] = None,
+        extraction_strategy: Optional[ExtractionStrategy] = None,
+        chunking_strategy: Optional[ChunkingStrategy] = None,
+        content_filter: Optional[RelevantContentFilter] = None,
         cache_mode: Optional[CacheMode] = None,
         bypass_cache: bool = False,
-        css_selector: str = None,
+        css_selector: Optional[str] = None,
         screenshot: bool = False,
         pdf: bool = False,
-        user_agent: str = None,
-        verbose=True,
-        **kwargs
-        ) -> RunManyReturn:
-        """
-        Runs the crawler for multiple URLs concurrently using a configurable dispatcher strategy.
-
-        Args:
-        urls: List of URLs to crawl
-        config: Configuration object controlling crawl behavior for all URLs
-        dispatcher: The dispatcher strategy instance to use. Defaults to MemoryAdaptiveDispatcher
-        [other parameters maintained for backwards compatibility]
-
-        Returns:
-        Union[List[CrawlResult], AsyncGenerator[CrawlResult, None]]:
-            Either a list of all results or an async generator yielding results
-
-        Examples:
-
-        # Batch processing (default)
-        results = await crawler.arun_many(
-            urls=["https://example1.com", "https://example2.com"],
-            config=CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
-        )
-        for result in results:
-            print(f"Processed {result.url}: {len(result.markdown)} chars")
-
-        # Streaming results
-        async for result in await crawler.arun_many(
-            urls=["https://example1.com", "https://example2.com"],
-            config=CrawlerRunConfig(cache_mode=CacheMode.BYPASS, stream=True),
-        ):
-            print(f"Processed {result.url}: {len(result.markdown)} chars")
-        """
+        user_agent: Optional[str] = None,
+        verbose: bool = True,
+        **kwargs: Dict[str, Any],
+    ) -> RunManyReturn[CrawlResult]:
+        """Run the crawler for multiple URLs concurrently."""
         if config is None:
             config = CrawlerRunConfig(
-                word_count_threshold=word_count_threshold,
+                word_count_threshold=word_count_threshold or MIN_WORD_THRESHOLD,
                 extraction_strategy=extraction_strategy,
-                chunking_strategy=chunking_strategy,
+                chunking_strategy=chunking_strategy or RegexChunking(),
                 content_filter=content_filter,
                 cache_mode=cache_mode,
                 bypass_cache=bypass_cache,
@@ -781,13 +769,18 @@ class AsyncWebCrawler:
         if dispatcher is None:
             dispatcher = MemoryAdaptiveDispatcher(
                 rate_limiter=RateLimiter(
-                    base_delay=(1.0, 3.0), max_delay=60.0, max_retries=3
+                    base_delay=(1.0, 3.0),
+                    max_delay=60.0,
+                    max_retries=3
                 ),
             )
 
-        transform_result = lambda task_result: (
-            setattr(task_result.result, 'dispatch_result', 
+        def transform_result(task_result: CrawlerTaskResult) -> CrawlResult:
+            result = task_result.result
+            setattr(result, 'dispatch_result',
                 DispatchResult(
+                    strategy_used=task_result.strategy_used,
+                    results=[task_result],
                     task_id=task_result.task_id,
                     memory_usage=task_result.memory_usage,
                     peak_memory=task_result.peak_memory,
@@ -795,28 +788,28 @@ class AsyncWebCrawler:
                     end_time=task_result.end_time,
                     error_message=task_result.error_message,
                 )
-            ) or task_result.result
-        )
+            )
+            return result
 
-        stream = config.stream
+        stream = getattr(config, "stream", False)
         
         if stream:
-            async def result_transformer():
+            async def result_transformer() -> AsyncGenerator[CrawlResult, None]:
                 async for task_result in dispatcher.run_urls_stream(crawler=self, urls=urls, config=config):
                     yield transform_result(task_result)
             return result_transformer()
         else:
-            _results = await dispatcher.run_urls(crawler=self, urls=urls, config=config)
-            return [transform_result(res) for res in _results]    
+            results = await dispatcher.run_urls(crawler=self, urls=urls, config=config)
+            return [transform_result(res) for res in results]
 
-    async def aclear_cache(self):
+    async def aclear_cache(self) -> None:
         """Clear the cache database."""
         await async_db_manager.cleanup()
 
-    async def aflush_cache(self):
+    async def aflush_cache(self) -> None:
         """Flush the cache database."""
-        await async_db_manager.aflush_db()
+        await async_db_manager.flush()
 
-    async def aget_cache_size(self):
+    async def aget_cache_size(self) -> int:
         """Get the total number of cached items."""
-        return await async_db_manager.aget_total_count()
+        return await async_db_manager.get_total_count()
