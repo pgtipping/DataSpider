@@ -1,10 +1,14 @@
 """Main FastAPI application module."""
 
 import os
+import json
+import asyncio
+from typing import Dict, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.datastructures import Secret
 from pathlib import Path
@@ -30,6 +34,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+# Mount static files directory
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Enable CORS
 app.add_middleware(
@@ -88,21 +95,24 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             try:
                 # Receive and parse message
                 message = await websocket.receive_text()
-                data = json.loads(message)
+                data: Dict[str, Any] = json.loads(message)
                 
                 # Handle different actions
                 if data["action"] == "crawl":
                     result = await playground_service.execute_crawl(
-                        url=data["url"],
-                        selector=data.get("options", {}).get("selector"),
-                        extract_images=data.get("options", {}).get("extract_images", False),
-                        extract_text=data.get("options", {}).get("extract_text", True),
-                        extract_links=data.get("options", {}).get("extract_links", False)
+                        url=str(data["url"]),
+                        selector=str(data.get("options", {}).get("selector")),
+                        extract_images=bool(data.get("options", {}).get("extract_images", False)),
+                        extract_text=bool(data.get("options", {}).get("extract_text", True)),
+                        extract_links=bool(data.get("options", {}).get("extract_links", False))
                     )
                     await playground_service.send_update(client_id, {
-                        "status": "completed",
+                        "type": "crawl_result",
                         "data": result
                     })
+                    
+                    # Schedule cleanup task
+                    asyncio.create_task(cleanup_task())
                     
                 elif data["action"] == "validate_selector":
                     matches = await playground_service.validate_selector(
@@ -152,13 +162,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
         await playground_service.disconnect(client_id)
         raise
 
-# Cleanup task
-@app.on_event("startup")
-async def startup_event():
-    """Run cleanup task on startup."""
-    async def cleanup_task():
-        while True:
-            playground_service.cleanup_old_sessions()
-            await asyncio.sleep(3600)  # Run every hour
-            
-    asyncio.create_task(cleanup_task())
+async def cleanup_task():
+    """Background task to clean up resources."""
+    await asyncio.sleep(60)  # Wait for 60 seconds
+    # Add cleanup logic here if needed
