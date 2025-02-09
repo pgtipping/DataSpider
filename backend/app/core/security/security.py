@@ -1,8 +1,13 @@
-from fastapi import Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+"""Security configuration and middleware for the FastAPI application."""
 
-def setup_security(app):
+from typing import Awaitable, Callable
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
+
+
+def setup_security(app: FastAPI):
     # Configure CORS
     app.add_middleware(
         CORSMiddleware,
@@ -14,7 +19,7 @@ def setup_security(app):
 
     # Security headers middleware
     @app.middleware("http")
-    async def add_security_headers(request: Request, call_next):
+    async def add_security_headers(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
@@ -24,13 +29,12 @@ def setup_security(app):
 
     # Input validation middleware
     @app.middleware("http")
-    async def validate_inputs(request: Request, call_next):
+    async def validate_inputs(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response | JSONResponse:
         try:
             if request.method in ["POST", "PUT"]:
                 await request.json()
             return await call_next(request)
         except ValueError:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Invalid JSON payload"}
-            )
+            return JSONResponse(status_code=400, content={"error": "Invalid JSON payload"})

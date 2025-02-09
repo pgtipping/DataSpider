@@ -14,7 +14,7 @@ This document provides comprehensive instructions for setting up and running the
 
 ## Directory Structure
 
-```
+```structure
 backend/
 ├── app/                    # Main application code
 │   ├── api/               # API endpoints
@@ -209,10 +209,10 @@ webdriver-manager>=4.0.1
 
 ## Additional Resources
 
-- FastAPI Documentation: https://fastapi.tiangolo.com/
+- FastAPI Documentation: <https://fastapi.tiangolo.com/>
 - Crawl4AI Documentation: [Link to docs]
-- Playwright Documentation: https://playwright.dev/python/
-- WebSocket Guide: https://fastapi.tiangolo.com/advanced/websockets/
+- Playwright Documentation: <https://playwright.dev/python/>
+- WebSocket Guide: <https://fastapi.tiangolo.com/advanced/websockets/>
 
 ## Support
 

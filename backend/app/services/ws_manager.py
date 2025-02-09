@@ -1,6 +1,10 @@
+"""WebSocket manager for handling real-time connections."""
+
 import asyncio
-from typing import Dict, Any
+from typing import Any, Dict
+
 from fastapi import WebSocket
+
 
 class WebSocketManager:
     def __init__(self):
@@ -26,5 +30,6 @@ class WebSocketManager:
         async with self.lock:
             for connection in self.active_connections.values():
                 await connection.send_json(message)
+
 
 ws_manager = WebSocketManager()
