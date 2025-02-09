@@ -1,68 +1,139 @@
-"""Service for handling web crawling playground functionality."""
+"""Service for handling playground functionality."""
 
+from datetime import datetime
+from typing import Dict, List, Optional, Any
+from fastapi import WebSocket
+import validators
+import cssselect
 import asyncio
-from typing import Any, Dict, Optional
-
-from crawl4ai import Crawler, CrawlerResult
-from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
-from crawl4ai.cache_context import CacheContext, CacheMode
-
-from .ws_manager import ws_manager
-
 
 class PlaygroundService:
-    def __init__(self) -> None:
+    """Service for handling playground functionality and WebSocket connections."""
+    
+    def __init__(self):
         """Initialize the playground service."""
-        self.crawler = Crawler()
-        self.cache = CacheContext(cache_mode=CacheMode.ENABLED)
-        self.semaphore = asyncio.Semaphore(5)  # Limit concurrent crawls
-
-    async def execute_crawl(self, config: Dict[str, Any], client_id: str) -> str:
-        """Execute a crawl and return job ID."""
+        self.websockets: Dict[str, WebSocket] = {}
+        self.active_sessions: Dict[str, Dict[str, Any]] = {}
+        
+    async def connect(self, client_id: str, websocket: WebSocket) -> None:
+        """Connect a client to the WebSocket service.
+        
+        Args:
+            client_id: Unique identifier for the client
+            websocket: WebSocket connection instance
+        """
+        await websocket.accept()
+        self.websockets[client_id] = websocket
+        self.active_sessions[client_id] = {
+            "start_time": datetime.now(),
+            "data": {}
+        }
+        
+    async def disconnect(self, client_id: str) -> None:
+        """Disconnect a client from the WebSocket service.
+        
+        Args:
+            client_id: Unique identifier for the client
+        """
+        if client_id in self.websockets:
+            await self.websockets[client_id].close()
+            del self.websockets[client_id]
+        if client_id in self.active_sessions:
+            del self.active_sessions[client_id]
+            
+    async def send_update(self, client_id: str, data: Dict[str, Any]) -> None:
+        """Send an update to a connected client.
+        
+        Args:
+            client_id: Unique identifier for the client
+            data: Update data to send
+        """
+        if client_id in self.websockets:
+            await self.websockets[client_id].send_json(data)
+            
+    async def execute_crawl(
+        self,
+        url: str,
+        selector: Optional[str] = None,
+        extract_images: bool = False,
+        extract_text: bool = True,
+        extract_links: bool = False
+    ) -> Dict[str, Any]:
+        """Execute a crawl operation on the specified URL.
+        
+        Args:
+            url: Target URL to crawl
+            selector: Optional CSS selector to filter content
+            extract_images: Whether to extract image URLs
+            extract_text: Whether to extract text content
+            extract_links: Whether to extract links
+            
+        Returns:
+            Dict containing extracted data
+            
+        Raises:
+            ValueError: If URL or selector is invalid
+        """
+        if not validators.url(str(url)):
+            raise ValueError("Invalid URL provided")
+            
+        if selector:
+            try:
+                cssselect.parse(selector)
+            except Exception as e:
+                raise ValueError(f"Invalid CSS selector: {str(e)}")
+                
+        # TODO: Implement actual crawling logic
+        # This is a placeholder return
+        return {
+            "url": url,
+            "text": "Sample extracted text",
+            "images": [] if extract_images else None,
+            "links": [] if extract_links else None
+        }
+        
+    async def validate_selector(self, url: str, selector: str) -> List[str]:
+        """Validate a CSS selector against a URL and return matching elements.
+        
+        Args:
+            url: Target URL to validate against
+            selector: CSS selector to validate
+            
+        Returns:
+            List of matching element descriptions
+            
+        Raises:
+            ValueError: If URL or selector is invalid
+        """
+        if not validators.url(str(url)):
+            raise ValueError("Invalid URL provided")
+            
         try:
-            browser_config = BrowserConfig.from_kwargs(config.get("browser", {}))
-            crawler_config = CrawlerRunConfig.from_kwargs(config.get("crawler", {}))
-
-            async with self.semaphore:
-                job_id = f"playground_job_{id(config)}"
-                await ws_manager.send_message(client_id, {"type": "status", "message": "Crawl started", "progress": 0})
-
-                # Run the crawl and cache results
-                result = await self.crawler.run_async(
-                    url=crawler_config.url,
-                    strategy=crawler_config.strategy,
-                    browser_config=browser_config
-                )
-
-                self.cache.set(
-                    job_id,
-                    {
-                        "status": "completed",
-                        "result": result.to_dict() if hasattr(result, 'to_dict') else str(result),
-                        "pdf_url": f"/results/{job_id}.pdf",  # Demo PDF placeholder
-                    },
-                    ttl=3600,
-                )
-
-                await ws_manager.send_message(
-                    client_id,
-                    {
-                        "type": "status",
-                        "message": "Crawl completed",
-                        "progress": 100,
-                        "job_id": job_id
-                    }
-                )
-
-                return job_id
-
+            cssselect.parse(selector)
         except Exception as e:
-            await ws_manager.send_message(client_id, {"type": "error", "message": str(e)})
-            raise
-
-    def get_results(self, job_id: str) -> Optional[Dict[str, Any]]:
-        """Retrieve cached results."""
-        return self.cache.get(job_id)
-
-
-playground_service = PlaygroundService()
+            raise ValueError(f"Invalid CSS selector: {str(e)}")
+            
+        # TODO: Implement actual validation logic
+        # This is a placeholder return
+        return ["Sample matching element"]
+        
+    def cleanup_old_sessions(self, max_age_hours: float = 1.0) -> None:
+        """Clean up sessions older than the specified age.
+        
+        Args:
+            max_age_hours: Maximum age of sessions in hours
+        """
+        current_time = datetime.now()
+        sessions_to_remove: List[str] = []
+        
+        for client_id, session in self.active_sessions.items():
+            age = current_time - session["start_time"]
+            if age.total_seconds() > max_age_hours * 3600:
+                sessions_to_remove.append(client_id)
+                
+        for client_id in sessions_to_remove:
+            if client_id in self.websockets:
+                # Schedule disconnection in the background
+                asyncio.create_task(self.disconnect(client_id))
+            else:
+                del self.active_sessions[client_id]

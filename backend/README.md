@@ -1,72 +1,108 @@
-# Crawl4AI Backend
+# Backend Service
 
-This is the backend server component of the Crawl4AI project. It provides a FastAPI-based server that handles web crawling requests and manages the playground functionality.
+This is the backend service for the web crawler application. It provides a WebSocket-based playground for testing and experimenting with web crawling functionality.
 
 ## Features
 
-- FastAPI-based REST API
-- WebSocket support for real-time updates
-- Browser automation with Playwright
-- Caching system for improved performance
-- Rate limiting and security features
+- Real-time web crawling with WebSocket updates
+- CSS selector validation
+- Configurable content extraction (text, images, links)
+- Session management with automatic cleanup
 
-## Installation
+## Setup
 
 1. Create a virtual environment:
 
 ```bash
 python -m venv venv
-source venv/Scripts/activate  # Windows
-source venv/bin/activate      # Linux/Mac
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
 2. Install dependencies:
 
 ```bash
 pip install -r requirements.txt
-pip install crawl4ai[all]
-playwright install --with-deps
 ```
 
-3. Set up environment variables:
+3. Run the server:
 
 ```bash
-cp .env.example .env
-# Edit .env with your configuration
+uvicorn app.main:app --reload
 ```
 
-4. Create necessary directories:
+The server will start on `http://localhost:8000` by default.
+
+## Testing
+
+Run the tests using pytest:
 
 ```bash
-mkdir -p data/temp data/cache logs
-```
-
-5. Install the package in development mode:
-
-```bash
-pip install -e .
-```
-
-## Running the Server
-
-Development mode:
-
-```bash
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Production mode:
-
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+pytest
 ```
 
 ## API Documentation
 
-Once the server is running, you can access the API documentation at:
+Once the server is running, you can access:
 
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+- API documentation: `http://localhost:8000/docs`
+- Alternative documentation: `http://localhost:8000/redoc`
+
+## WebSocket Endpoints
+
+### Playground WebSocket
+
+Connect to `/ws/playground/{client_id}` to start a playground session.
+
+Example client usage:
+
+```javascript
+const ws = new WebSocket("ws://localhost:8000/ws/playground/my-client-id");
+
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log("Received:", data);
+};
+
+// Example crawl request
+ws.send(
+  JSON.stringify({
+    action: "crawl",
+    url: "https://example.com",
+    options: {
+      extract_text: true,
+      extract_images: true,
+      extract_links: true,
+      selector: "div.content",
+    },
+  })
+);
+```
+
+## Development
+
+The service is built with:
+
+- FastAPI for the web framework
+- WebSockets for real-time communication
+- Pytest for testing
+- Type hints for better code quality
+
+### Project Structure
+
+```
+backend/
+├── app/
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── playground_service.py
+│   ├── __init__.py
+│   └── main.py
+├── tests/
+│   ├── __init__.py
+│   └── test_playground_service.py
+├── requirements.txt
+└── README.md
+```
 
 ## License
 
