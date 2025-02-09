@@ -1,27 +1,34 @@
 """Main FastAPI application module."""
 
-import json
-import asyncio
-from typing import Dict, Any
+import os
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.datastructures import Secret
 from pathlib import Path
 from dotenv import load_dotenv
-import datetime
+from contextlib import asynccontextmanager
 from .services.playground_service import PlaygroundService
 
 # Load environment variables
 env_path = Path(__file__).parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event handler for FastAPI application."""
+    # Startup
+    yield
+    # Shutdown
+    await playground_service.close()
+
 app = FastAPI(
     title="Web Crawler Service",
     description="A WebSocket-based web crawler service for extracting content from web pages.",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Enable CORS
@@ -36,19 +43,25 @@ app.add_middleware(
 # Security middleware
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=1000)
-app.add_middleware(SessionMiddleware, secret_key=os.getenv("SECRET_KEY"))
+secret_key = Secret(str(os.getenv("SECRET_KEY", "")))
+app.add_middleware(SessionMiddleware, secret_key=secret_key)
 
 # Rate limiting middleware
 if os.getenv("RATE_LIMIT_ENABLED", "true").lower() == "true":
     from slowapi import Limiter
     from slowapi.util import get_remote_address
+    from slowapi.middleware import SlowAPIMiddleware
     
     limiter = Limiter(key_func=get_remote_address)
     app.state.limiter = limiter
-    app.add_middleware(BaseHTTPMiddleware, dispatch=limiter.middleware)
+    app.add_middleware(SlowAPIMiddleware)
 
 # Initialize services
 playground_service = PlaygroundService()
+
+# Import and include routers
+from .routers import playground
+app.include_router(playground.router)
 
 @app.get("/")
 async def root():
@@ -59,12 +72,6 @@ async def root():
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
-
-# Import and include routers
-from app.routers import crawler, playground
-
-app.include_router(crawler.router, prefix="/api/v1/crawler", tags=["crawler"])
-app.include_router(playground.router, prefix="/api/v1/playground", tags=["playground"])
 
 @app.websocket("/ws/playground/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):

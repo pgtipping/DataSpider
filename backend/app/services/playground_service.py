@@ -51,6 +51,11 @@ class PlaygroundService:
         if client_id in self.websockets:
             await self.websockets[client_id].send_json(data)
             
+    async def close(self) -> None:
+        """Close all active WebSocket connections."""
+        for client_id in list(self.websockets.keys()):
+            await self.disconnect(client_id)
+            
     async def execute_crawl(
         self,
         url: str,
