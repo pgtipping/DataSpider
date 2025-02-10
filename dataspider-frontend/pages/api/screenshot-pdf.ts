@@ -15,11 +15,12 @@ interface CaptureOptions {
   fullPage?: boolean;
 }
 
-const MAX_OPERATION_TIME = 60000; // 60 seconds
+const MAX_OPERATION_TIME = 120000; // Increased to 120 seconds for PDF generation
 const MAX_CONTENT_SIZE = 50 * 1024 * 1024; // 50MB for PDFs
 const MAX_VIEWPORT_WIDTH = 3840; // 4K
 const MAX_VIEWPORT_HEIGHT = 2160; // 4K
 const MAX_SCALE_FACTOR = 3;
+const NAVIGATION_TIMEOUT = 60000; // 60 seconds for navigation
 
 // Stealth script to override navigator properties and hide automation
 const STEALTH_SCRIPT = `
@@ -63,10 +64,19 @@ async function captureContent(
         "--disable-blink-features=AutomationControlled",
         "--disable-infobars",
         `--window-size=${width},${height}`,
+        "--start-maximized",
+        "--disable-dev-shm-usage",
+        "--disable-accelerated-2d-canvas",
+        "--no-first-run",
+        "--disable-gpu",
+        "--ignore-certificate-errors",
       ],
+      timeout: 60000, // Increased browser launch timeout
     });
 
     const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(NAVIGATION_TIMEOUT);
+    page.setDefaultTimeout(NAVIGATION_TIMEOUT);
 
     // Set up content size monitoring
     let totalContentSize = 0;
@@ -105,63 +115,93 @@ async function captureContent(
       Pragma: "no-cache",
     });
 
-    // Set up operation timeout
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => {
-        reject(new Error("Operation timed out"));
-      }, MAX_OPERATION_TIME);
-    });
+    // Navigate to URL with improved timeout and error handling
+    try {
+      await Promise.race([
+        page.goto(url, {
+          waitUntil: "domcontentloaded", // Changed from networkidle0 to domcontentloaded
+          timeout: NAVIGATION_TIMEOUT,
+        }),
+        new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("Navigation timeout")),
+            NAVIGATION_TIMEOUT
+          )
+        ),
+      ]);
 
-    // Navigate to URL with timeout
-    await Promise.race([
-      page.goto(url, {
-        waitUntil: ["networkidle0", "domcontentloaded"],
-        timeout: 30000,
-      }),
-      timeoutPromise,
-    ]);
+      // Additional wait for page stability
+      await page
+        .waitForFunction(
+          () => {
+            return (
+              document.readyState === "complete" ||
+              document.readyState === "interactive"
+            );
+          },
+          { timeout: 30000 }
+        )
+        .catch(() => console.warn("Page stability wait timed out"));
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("timeout")) {
+        console.warn(
+          "Navigation timed out, attempting to continue with partial load"
+        );
+      } else {
+        throw error;
+      }
+    }
 
-    // Wait for content to load
-    await Promise.race([
-      page.evaluate(() => {
-        return new Promise<void>((resolve) => {
-          const images = document.querySelectorAll("img");
-          if (images.length === 0) {
-            resolve();
-            return;
-          }
-
-          let loadedImages = 0;
-          const totalImages = images.length;
-          const imageTimeout = setTimeout(() => resolve(), 10000); // 10s timeout for images
-
-          images.forEach((img) => {
-            if (img.complete) {
-              loadedImages++;
-              if (loadedImages === totalImages) {
-                clearTimeout(imageTimeout);
-                resolve();
-              }
+    // Wait for content with more lenient timeout
+    try {
+      await Promise.race([
+        page.evaluate(() => {
+          return new Promise<void>((resolve) => {
+            if (document.readyState === "complete") {
+              resolve();
+              return;
             }
-            img.addEventListener("load", () => {
-              loadedImages++;
-              if (loadedImages === totalImages) {
-                clearTimeout(imageTimeout);
-                resolve();
+
+            const images = document.querySelectorAll("img");
+            if (images.length === 0) {
+              resolve();
+              return;
+            }
+
+            let loadedImages = 0;
+            const totalImages = images.length;
+            const imageTimeout = setTimeout(() => resolve(), 20000); // Increased timeout for images
+
+            images.forEach((img) => {
+              if (img.complete) {
+                loadedImages++;
+                if (loadedImages === totalImages) {
+                  clearTimeout(imageTimeout);
+                  resolve();
+                }
               }
-            });
-            img.addEventListener("error", () => {
-              loadedImages++;
-              if (loadedImages === totalImages) {
-                clearTimeout(imageTimeout);
-                resolve();
-              }
+              img.addEventListener("load", () => {
+                loadedImages++;
+                if (loadedImages === totalImages) {
+                  clearTimeout(imageTimeout);
+                  resolve();
+                }
+              });
+              img.addEventListener("error", () => {
+                loadedImages++;
+                if (loadedImages === totalImages) {
+                  clearTimeout(imageTimeout);
+                  resolve();
+                }
+              });
             });
           });
-        });
-      }),
-      timeoutPromise,
-    ]);
+        }),
+        new Promise((resolve) => setTimeout(resolve, 30000)), // Fallback timeout
+      ]);
+    } catch (error) {
+      console.warn("Content wait timed out, proceeding with capture");
+    }
 
     // Remove cookie banners and other overlays
     await page.evaluate(() => {
@@ -186,12 +226,23 @@ async function captureContent(
 
     let result: string | Buffer;
     if (type === "pdf") {
+      // Add delay before PDF generation
+      await page.waitForTimeout(2000);
+
+      // Ensure proper page dimensions
+      const bodyHandle = await page.$("body");
+      const { width: bodyWidth, height: bodyHeight } = bodyHandle
+        ? (await bodyHandle.boundingBox()) || { width: 800, height: 1000 }
+        : { width: 800, height: 1000 };
+      await bodyHandle?.dispose();
+
       result = await page.pdf({
         format: "A4",
         printBackground: true,
         margin: { top: "1cm", right: "1cm", bottom: "1cm", left: "1cm" },
         preferCSSPageSize: true,
-        scale: 1,
+        scale: 0.8, // Slightly reduced scale to prevent content overflow
+        timeout: 60000, // Specific timeout for PDF generation
       } as PDFOptions);
 
       // Check PDF size
