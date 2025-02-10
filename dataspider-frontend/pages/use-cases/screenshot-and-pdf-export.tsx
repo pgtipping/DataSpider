@@ -10,6 +10,8 @@ import {
   FileText,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 
 interface ExportOptions {
   width: number;
@@ -125,6 +127,31 @@ const ScreenshotAndPDFExport = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-12">
+        <nav className="flex mb-8" aria-label="Breadcrumb">
+          <ol className="flex items-center space-x-2">
+            <li>
+              <Link href="/" className="text-blue-500 hover:text-blue-700">
+                Home
+              </Link>
+            </li>
+            <ChevronRight className="h-4 w-4 text-gray-400" />
+            <li>
+              <Link
+                href="/examples"
+                className="text-blue-500 hover:text-blue-700"
+              >
+                Examples
+              </Link>
+            </li>
+            <ChevronRight className="h-4 w-4 text-gray-400" />
+            <li>
+              <span className="text-gray-900 font-medium">
+                Screenshot & PDF Export
+              </span>
+            </li>
+          </ol>
+        </nav>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
