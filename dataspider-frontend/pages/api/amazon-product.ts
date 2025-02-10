@@ -30,13 +30,14 @@ const SELECTORS = {
     'h1[class*="title"]',
   ],
   price: [
-    'span[data-a-color="price"] .a-offscreen',
-    ".reinventPricePriceToPayMargin .a-offscreen",
+    'span.a-price span[aria-hidden="true"]',
+    "span.a-price .a-offscreen",
+    "#corePrice_feature_div .a-price .a-offscreen",
     "#priceblock_ourprice",
     "#priceblock_dealprice",
-    ".a-price .a-offscreen",
     "#price_inside_buybox",
     ".a-price-whole",
+    ".a-color-price",
   ],
   rating: [
     "#averageCustomerReviews .a-icon-star .a-icon-alt",
@@ -99,6 +100,17 @@ const SELECTORS = {
     ".a-breadcrumb li span.a-list-item",
     "#nav-subnav .nav-a-content",
   ],
+  reviews: [
+    '#cm-cr-dp-review-list div[data-hook="review"]',
+    '#customer-reviews-content div[data-hook="review"]',
+    '.review-views-content div[data-hook="review"]',
+  ],
+  reviewFeatures: [
+    "#feature-bullets .a-list-item",
+    "#feature-bullets li:not(.aok-hidden)",
+    ".a-unordered-list .a-list-item:not(.aok-hidden)",
+    '[data-feature-name="featurebullets"] .a-list-item',
+  ],
 };
 
 function cleanText(text: string | null | undefined): string {
@@ -113,7 +125,15 @@ function cleanText(text: string | null | undefined): string {
 }
 
 function cleanPrice(price: string): string {
-  return price.replace(/[^\d.,]/g, "").trim();
+  if (!price) return "";
+  // Remove currency symbols and normalize
+  const cleaned = price.replace(/[^\d.,]/g, "").trim();
+  // Handle different price formats
+  if (cleaned.includes(",") && cleaned.includes(".")) {
+    // Format like 1,234.56
+    return cleaned.replace(",", "");
+  }
+  return cleaned;
 }
 
 function cleanReviewCount(count: string): string {
@@ -126,32 +146,55 @@ function cleanRating(rating: string): string {
   return matches ? matches[0] + " out of 5 stars" : "";
 }
 
-function extractReviews(document: Document): string[] {
+function extractReviews(document: Document): {
+  reviews: string[];
+  topFeatures: string[];
+} {
   const reviews: string[] = [];
-  const reviewElements = document.querySelectorAll('[data-hook="review"]');
+  const topFeaturesSet = new Set<string>();
 
+  // Extract reviews with better formatting
+  const reviewElements = findElements(document, SELECTORS.reviews);
   reviewElements.forEach((review) => {
     const rating = review.querySelector(
-      '[data-hook="review-star-rating"]'
+      '[data-hook="review-star-rating"], [data-hook="cmps-review-star-rating"]'
     )?.textContent;
     const title = review.querySelector(
-      '[data-hook="review-title"]'
+      '[data-hook="review-title"], .review-title'
     )?.textContent;
     const author = review.querySelector(".a-profile-name")?.textContent;
     const date = review.querySelector('[data-hook="review-date"]')?.textContent;
-    const body = review.querySelector('[data-hook="review-body"]')?.textContent;
+    const body = review.querySelector(
+      '[data-hook="review-body"], .review-text'
+    )?.textContent;
+    const verified = review.querySelector(".avp-badge")?.textContent;
 
     if (rating && body) {
-      const reviewText = `${cleanText(rating)} - ${cleanText(title || "")}
-        By ${cleanText(author || "Anonymous")} on ${cleanText(date || "")}
-        ${cleanText(body)}`
-        .replace(/\s+/g, " ")
-        .trim();
+      const reviewText = [
+        `${cleanText(rating)} - ${cleanText(title || "")}`,
+        `By ${cleanText(author || "Anonymous")} on ${cleanText(date || "")}`,
+        verified ? "Verified Purchase" : "",
+        cleanText(body),
+      ]
+        .filter(Boolean)
+        .join("\n");
+
       reviews.push(reviewText);
+
+      // Extract key features mentioned in positive reviews
+      if (rating.includes("5.0") || rating.includes("4.0")) {
+        const features = body.match(
+          /(?:great|good|excellent|love|perfect)\s+([^.!?]+)[.!?]/gi
+        );
+        features?.forEach((f) => topFeaturesSet.add(cleanText(f)));
+      }
     }
   });
 
-  return reviews.slice(0, 5); // Return only top 5 reviews
+  return {
+    reviews: reviews.slice(0, 10), // Get top 10 most helpful reviews
+    topFeatures: Array.from(topFeaturesSet).slice(0, 5), // Top 5 mentioned features
+  };
 }
 
 function findElement(document: Document, selectors: string[]): Element | null {
@@ -221,10 +264,14 @@ async function extractProductData(url: string): Promise<ProductData> {
     const title = cleanText(
       findElement(document, SELECTORS.title)?.textContent
     );
-    const priceElement = findElement(document, SELECTORS.price);
-    const price = priceElement
-      ? cleanPrice(priceElement.textContent || "")
-      : "";
+    let price = "";
+    for (const selector of SELECTORS.price) {
+      const priceElement = document.querySelector(selector);
+      if (priceElement?.textContent) {
+        price = cleanPrice(priceElement.textContent);
+        if (price) break;
+      }
+    }
     const ratingElement = findElement(document, SELECTORS.rating);
     const rating = ratingElement
       ? cleanRating(ratingElement.textContent || "")
@@ -257,15 +304,16 @@ async function extractProductData(url: string): Promise<ProductData> {
       .filter(Boolean);
     const description = descriptionParts.join("\n\n");
 
-    // Extract features with better filtering
-    const features = findElements(document, SELECTORS.features)
+    // Extract regular product features
+    const productFeatures = findElements(document, SELECTORS.reviewFeatures)
       .map((el) => cleanText(el.textContent))
       .filter(
         (text) =>
           text &&
           !text.includes("var metrics") &&
           !text.includes("function") &&
-          !text.includes("javascript:")
+          !text.includes("javascript:") &&
+          !text.includes("star") // Remove star ratings from features
       );
 
     // Extract high-quality images
@@ -304,10 +352,20 @@ async function extractProductData(url: string): Promise<ProductData> {
       .map((el) => cleanText(el.textContent))
       .filter(Boolean);
 
-    // Extract top reviews
-    const reviews = extractReviews(document);
+    // Extract reviews and mentioned features
+    const { reviews, topFeatures } = extractReviews(document);
+
+    // Organize features properly
+    const features = [
+      ...new Set([
+        ...productFeatures.filter((f) => !f.includes("star")),
+        ...topFeatures,
+      ]),
+    ];
+
+    // Add reviews to specifications
     if (reviews.length > 0) {
-      specifications["Top Reviews"] = reviews.join("\n\n");
+      specifications["Customer Reviews"] = reviews.join("\n\n---\n\n");
     }
 
     if (!title) {
