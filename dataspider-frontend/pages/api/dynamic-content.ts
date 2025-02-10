@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import puppeteer from "puppeteer";
-import { withRateLimit } from "@/lib/rate-limit";
+import { rateLimit } from "@/lib/rate-limit";
+import { isValidUrl } from "@/lib/validation";
 
 interface LoadedItem {
   structured: {
@@ -17,6 +18,10 @@ interface LoadedContent {
   totalItems: number;
   items: LoadedItem[];
 }
+
+const MAX_OPERATION_TIME = 60000; // 60 seconds
+const MAX_CONTENT_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_ITEMS = 1000; // Maximum number of items to extract
 
 // Stealth script to override navigator properties and hide automation
 const STEALTH_SCRIPT = `
@@ -45,20 +50,39 @@ async function loadDynamicContent(
   maxClicks: number = 5,
   contentSelector?: string
 ): Promise<LoadedContent> {
-  const browser = await puppeteer.launch({
-    headless: "new",
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-blink-features=AutomationControlled",
-      "--disable-infobars",
-      "--window-size=1920,1080",
-      "--start-maximized",
-    ],
-  });
+  let browser = null;
+  const operationStart = Date.now();
 
   try {
+    if (!isValidUrl(url)) {
+      throw new Error("Invalid URL provided");
+    }
+
+    browser = await puppeteer.launch({
+      headless: "new",
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-blink-features=AutomationControlled",
+        "--disable-infobars",
+        "--window-size=1920,1080",
+        "--start-maximized",
+      ],
+    });
+
     const page = await browser.newPage();
+
+    // Set up content size monitoring
+    let totalContentSize = 0;
+    page.on("response", async (response) => {
+      const contentLength = parseInt(
+        response.headers()["content-length"] || "0"
+      );
+      totalContentSize += contentLength;
+      if (totalContentSize > MAX_CONTENT_SIZE) {
+        throw new Error("Content size limit exceeded");
+      }
+    });
 
     // Set a more realistic user agent
     await page.setUserAgent(
@@ -81,23 +105,38 @@ async function loadDynamicContent(
       Pragma: "no-cache",
     });
 
-    // Navigate with a longer timeout and wait for network idle
-    await page.goto(url, {
-      waitUntil: ["networkidle0", "domcontentloaded"],
-      timeout: 30000,
+    // Set up operation timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(new Error("Operation timed out"));
+      }, MAX_OPERATION_TIME);
     });
 
+    // Navigate with a longer timeout and wait for network idle
+    await Promise.race([
+      page.goto(url, {
+        waitUntil: ["networkidle0", "domcontentloaded"],
+        timeout: 30000,
+      }),
+      timeoutPromise,
+    ]);
+
     // Wait for page to be fully loaded and interactive
-    await page.waitForFunction(
-      () => {
-        return (
-          document.readyState === "complete" &&
-          !document.querySelector('meta[name="robots"][content*="noindex"]') &&
-          performance.timing.loadEventEnd > 0
-        );
-      },
-      { timeout: 30000 }
-    );
+    await Promise.race([
+      page.waitForFunction(
+        () => {
+          return (
+            document.readyState === "complete" &&
+            !document.querySelector(
+              'meta[name="robots"][content*="noindex"]'
+            ) &&
+            performance.timing.loadEventEnd > 0
+          );
+        },
+        { timeout: 30000 }
+      ),
+      timeoutPromise,
+    ]);
 
     // Initial scroll and wait
     await page.evaluate(() => {
@@ -130,6 +169,7 @@ async function loadDynamicContent(
         }
       } catch (e) {
         // Ignore errors if consent button not found
+        console.warn("Error handling cookie consent:", e);
       }
     }
 
@@ -208,6 +248,11 @@ async function loadDynamicContent(
 
     // Function to attempt clicking with multiple strategies
     const attemptClick = async (selector: string): Promise<boolean> => {
+      // Check operation timeout
+      if (Date.now() - operationStart > MAX_OPERATION_TIME) {
+        throw new Error("Operation timed out");
+      }
+
       // Strategy 1: Native click with proper waiting
       try {
         if (await waitForElementClickable(selector)) {
@@ -215,7 +260,7 @@ async function loadDynamicContent(
           return true;
         }
       } catch (e) {
-        console.log("Native click failed");
+        console.warn("Native click failed:", e);
       }
 
       // Strategy 2: JavaScript click with focus and scroll
@@ -233,7 +278,7 @@ async function loadDynamicContent(
         await page.waitForTimeout(1000);
         return true;
       } catch (e) {
-        console.log("JavaScript click failed");
+        console.warn("JavaScript click failed:", e);
       }
 
       // Strategy 3: Mouse event simulation
@@ -249,11 +294,12 @@ async function loadDynamicContent(
             await page.mouse.down();
             await page.waitForTimeout(100);
             await page.mouse.up();
+            await page.waitForTimeout(1000);
             return true;
           }
         }
       } catch (e) {
-        console.log("Mouse event simulation failed");
+        console.warn("Mouse event simulation failed:", e);
       }
 
       return false;
@@ -261,215 +307,158 @@ async function loadDynamicContent(
 
     // Function to check for new content
     const hasNewContent = async (prevCount: number): Promise<boolean> => {
-      try {
-        const newCount = await page.evaluate((contentSel) => {
-          const elements = contentSel
-            ? document.querySelectorAll(contentSel)
-            : document.querySelectorAll(
-                "article, .post, .card, .item, .entry, .article"
-              );
-          return elements.length;
-        }, contentSelector);
+      const newCount = await page.evaluate((sel) => {
+        return document.querySelectorAll(sel).length;
+      }, contentSelector || selector);
 
-        return newCount > prevCount;
-      } catch (e) {
-        return false;
-      }
+      return newCount > prevCount;
     };
 
-    // Function to extract structured content
+    // Function to extract content
     const extractContent = async () => {
-      return page.evaluate((contentSelector: string | undefined) => {
-        const elements = contentSelector
-          ? document.querySelectorAll(contentSelector)
-          : document.querySelectorAll(
-              "article, .post, .card, .item, .entry, .article"
-            );
+      const items = await page.evaluate((sel) => {
+        const elements = document.querySelectorAll(sel);
+        return Array.from(elements).map((el) => ({
+          structured: {
+            title: el
+              .querySelector("h1, h2, h3, h4, h5, h6")
+              ?.textContent?.trim(),
+            description: el
+              .querySelector("p, .description")
+              ?.textContent?.trim(),
+            link: el.querySelector("a")?.href,
+            date:
+              el.querySelector("time, [datetime]")?.getAttribute("datetime") ||
+              undefined,
+            author: el
+              .querySelector('[rel="author"], .author')
+              ?.textContent?.trim(),
+          },
+        }));
+      }, contentSelector || selector);
 
-        return Array.from(elements).map((el) => {
-          const structured: any = {};
+      // Check content size limit
+      const contentSize = JSON.stringify(items).length;
+      if (contentSize > MAX_CONTENT_SIZE) {
+        throw new Error("Content size limit exceeded");
+      }
 
-          // Title extraction with improved selectors
-          const titleEl = el.querySelector(
-            "h1, h2, h3, h4, .title, [class*='title'], [class*='heading'], a[class*='title'], .post-title, .entry-title, [data-testid*='title']"
-          );
-          if (titleEl) {
-            structured.title = titleEl.textContent?.trim();
-          }
+      // Check item count limit
+      if (items.length > MAX_ITEMS) {
+        throw new Error("Maximum item count exceeded");
+      }
 
-          // Description extraction with improved selectors
-          const descEl = el.querySelector(
-            "p, .description, .excerpt, .summary, [class*='desc'], [class*='text'], .post-excerpt, .entry-content, [data-testid*='description']"
-          );
-          if (descEl) {
-            structured.description = descEl.textContent?.trim();
-          }
-
-          // Link extraction with improved handling
-          const linkEl = el.querySelector("a[href]") || el.closest("a[href]");
-          if (linkEl instanceof HTMLAnchorElement && linkEl.href) {
-            structured.link = linkEl.href;
-          }
-
-          // Date extraction with improved selectors
-          const dateEl = el.querySelector(
-            "time, .date, .timestamp, [datetime], [class*='date'], [class*='time'], .post-date, .entry-date, [data-testid*='date']"
-          );
-          if (dateEl) {
-            structured.date =
-              dateEl.getAttribute("datetime") || dateEl.textContent?.trim();
-          }
-
-          // Author extraction with improved selectors
-          const authorEl = el.querySelector(
-            ".author, .byline, [class*='author'], [rel='author'], [class*='by'], .post-author, .entry-author, [data-testid*='author']"
-          );
-          if (authorEl) {
-            structured.author = authorEl.textContent?.trim();
-          }
-
-          return { structured };
-        });
-      }, contentSelector);
+      return items as LoadedItem[];
     };
 
     let clickCount = 0;
-    const items = new Set<string>();
-    let lastItemCount = 0;
+    let prevItemCount = 0;
+    let items: LoadedItem[] = [];
 
-    // Get initial content
-    const initialItems = await extractContent();
-    initialItems.forEach((item) => {
-      if (item.structured.title || item.structured.description) {
-        items.add(JSON.stringify(item));
-      }
-    });
-    lastItemCount = items.size;
+    // Initial content extraction
+    items = await extractContent();
+    prevItemCount = items.length;
 
-    // Click loop with improved detection and waiting
+    // Click and load more content
     while (clickCount < maxClicks) {
-      try {
-        // Scroll and wait
-        await page.evaluate(() => {
-          window.scrollTo({
-            top: document.body.scrollHeight,
-            behavior: "smooth",
-          });
-        });
-        await page.waitForTimeout(2000);
-
-        // Check if button exists and is clickable
-        if (!(await isElementClickable(selector))) {
-          console.log("Button not clickable, trying to scroll up");
-          await page.evaluate(() => {
-            window.scrollBy(0, -300);
-          });
-          await page.waitForTimeout(1000);
-
-          if (!(await isElementClickable(selector))) {
-            console.log("Button still not clickable after scroll adjustment");
-            break;
-          }
-        }
-
-        // Attempt to click the button
-        const clickSuccess = await attemptClick(selector);
-        if (!clickSuccess) {
-          console.log("All click attempts failed");
-          break;
-        }
-
-        clickCount++;
-        console.log(`Successfully clicked ${clickCount} times`);
-
-        // Wait for new content with better detection
-        let newContentFound = false;
-        for (let i = 0; i < 5; i++) {
-          await page.waitForTimeout(2000);
-          if (await hasNewContent(lastItemCount)) {
-            newContentFound = true;
-            break;
-          }
-        }
-
-        if (!newContentFound) {
-          console.log("No new content detected after click");
-          break;
-        }
-
-        // Extract and process new content
-        const newItems = await extractContent();
-        let newItemsFound = false;
-
-        newItems.forEach((item) => {
-          if (item.structured.title || item.structured.description) {
-            const itemString = JSON.stringify(item);
-            if (!items.has(itemString)) {
-              items.add(itemString);
-              newItemsFound = true;
-            }
-          }
-        });
-
-        if (!newItemsFound) {
-          console.log("No new unique items found");
-          break;
-        }
-
-        lastItemCount = items.size;
-        await page.waitForTimeout(2000);
-      } catch (error) {
-        console.log("Click attempt failed:", error);
+      // Check operation timeout
+      if (Date.now() - operationStart > MAX_OPERATION_TIME) {
         break;
       }
-    }
 
-    const uniqueItems = Array.from(items)
-      .map((item) => JSON.parse(item))
-      .filter((item) => item.structured.title || item.structured.description);
+      const clicked = await attemptClick(selector);
+      if (!clicked) {
+        break;
+      }
+
+      // Wait for new content
+      await page.waitForTimeout(2000);
+      const hasMore = await hasNewContent(prevItemCount);
+      if (!hasMore) {
+        break;
+      }
+
+      // Extract new content
+      items = await extractContent();
+      if (items.length <= prevItemCount) {
+        break;
+      }
+
+      prevItemCount = items.length;
+      clickCount++;
+    }
 
     return {
       clickCount,
-      totalItems: uniqueItems.length,
-      items: uniqueItems,
+      totalItems: items.length,
+      items,
     };
+  } catch (error) {
+    console.error("Dynamic content loading error:", error);
+    throw error;
   } finally {
-    await browser.close();
+    if (browser) {
+      try {
+        await browser.close();
+      } catch (e) {
+        console.error("Error closing browser:", e);
+      }
+    }
   }
 }
+
+const limiter = rateLimit({
+  interval: 60 * 1000, // 60 seconds
+  uniqueTokenPerInterval: 500,
+});
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { url, selector, maxClicks = 5, contentSelector } = req.body;
+  try {
+    // Apply rate limiting
+    await limiter.check(res, 5, "CACHE_TOKEN"); // 5 requests per minute per IP
+  } catch {
+    return res.status(429).json({ error: "Rate limit exceeded" });
+  }
+
+  const { url, selector, maxClicks } = req.body;
 
   if (!url || !selector) {
     return res.status(400).json({ error: "URL and selector are required" });
   }
 
-  if (maxClicks > 20) {
-    return res.status(400).json({ error: "Maximum 20 clicks allowed" });
+  if (!isValidUrl(url)) {
+    return res.status(400).json({ error: "Invalid URL provided" });
+  }
+
+  const parsedMaxClicks = parseInt(maxClicks);
+  if (isNaN(parsedMaxClicks) || parsedMaxClicks < 1 || parsedMaxClicks > 20) {
+    return res
+      .status(400)
+      .json({ error: "maxClicks must be between 1 and 20" });
   }
 
   try {
-    const result = await loadDynamicContent(
-      url,
-      selector,
-      maxClicks,
-      contentSelector
-    );
-    return res.status(200).json({ data: result });
+    const data = await loadDynamicContent(url, selector, parsedMaxClicks);
+    return res.status(200).json({ data });
   } catch (error) {
-    console.error("Dynamic content loading error:", error);
-    return res.status(500).json({
-      error:
-        error instanceof Error
-          ? error.message
-          : "Failed to load dynamic content",
-    });
+    console.error("Dynamic content error:", error);
+
+    if (error instanceof Error) {
+      if (error.message.includes("timeout")) {
+        return res.status(504).json({ error: "Operation timed out" });
+      }
+      if (error.message.includes("size limit")) {
+        return res.status(413).json({ error: "Content size limit exceeded" });
+      }
+      return res.status(500).json({ error: error.message });
+    }
+
+    return res.status(500).json({ error: "Failed to load dynamic content" });
   }
 }
 
-export default withRateLimit(handler);
+export default handler;
